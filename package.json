@@ -1,7 +1,8 @@
 {
-"name": "lunexa-ai",
+"name": "lunexa-2-0",
 "version": "1.0.0",
 "private": true,
+"description": "Lunexa AI Study Companion",
 "dependencies": {
 "@google/genai": "^1.0.0"
 }
