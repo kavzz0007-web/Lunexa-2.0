@@ -2,6 +2,7 @@
 
 /* =========================================
    LUNEXA AI - COMPLETE FRONTEND
+   Gemini Chat + AI Document Summarization
    ========================================= */
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -15,9 +16,11 @@ const toastElement = $("#toast");
 let toastTimer = null;
 let currentPage = "chat";
 let chatRequestPending = false;
+let documentRequestPending = false;
 let activeQuiz = 0;
 let quizAnswered = false;
 let openedGroupId = null;
+let visibleDocumentSummaryId = null;
 
 /* ---------- STORAGE ---------- */
 
@@ -34,7 +37,9 @@ function loadData() {
   };
 
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    const saved = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) || "{}"
+    );
 
     return {
       ...defaults,
@@ -50,7 +55,10 @@ const state = loadData();
 
 function saveData() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(state)
+    );
   } catch (error) {
     console.error("Lunexa could not save data:", error);
     showToast("Storage is full. Remove some saved items.");
@@ -59,7 +67,8 @@ function saveData() {
 
 function makeId() {
   return window.crypto?.randomUUID?.() ||
-    Date.now().toString(36) + Math.random().toString(36).slice(2);
+    Date.now().toString(36) +
+    Math.random().toString(36).slice(2);
 }
 
 function escapeHTML(value) {
@@ -105,7 +114,9 @@ function formatDate(value) {
 }
 
 function formatBytes(bytes) {
-  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024) {
+    return bytes + " B";
+  }
 
   if (bytes < 1048576) {
     return (bytes / 1024).toFixed(1) + " KB";
@@ -193,7 +204,8 @@ function renderPage() {
     history: renderHistoryPage
   };
 
-  const renderer = renderers[currentPage] || renderChatPage;
+  const renderer =
+    renderers[currentPage] || renderChatPage;
 
   pageContainer.innerHTML = renderer();
 }
@@ -202,8 +214,11 @@ function renderPage() {
 
 function renderChatPage() {
   const messages = state.messages.map(function (message) {
-    const role = message.role === "user" ? "user" : "assistant";
-    const label = role === "user" ? "You" : "Lunexa";
+    const role =
+      message.role === "user" ? "user" : "assistant";
+
+    const label =
+      role === "user" ? "You" : "Lunexa";
 
     return `
       <div class="message ${role}">
@@ -347,6 +362,7 @@ async function sendChatMessage(text) {
   addMessage("assistant", "Thinking... 💙");
 
   renderPage();
+
   setBuddyMessage("Thinking about your question... 💭");
 
   try {
@@ -545,26 +561,41 @@ function deleteNote(id) {
   showToast("Note deleted.");
 }
 
-/* ---------- DOCUMENTS ---------- */
+/* ---------- DOCUMENTS + AI SUMMARIZATION ---------- */
 
 function renderDocumentsPage() {
   const items = state.documents.map(function (file) {
+    const hasSummary =
+      typeof file.summary === "string" &&
+      file.summary.trim().length > 0;
+
     return `
       <div class="list-item">
         <div class="list-icon">📄</div>
 
         <div class="list-item-content">
           <strong>${escapeHTML(file.name)}</strong>
-          <small>${escapeHTML(file.size)} · ${formatDate(file.createdAt)}</small>
+          <small>${escapeHTML(file.size || "")} · ${formatDate(file.createdAt)}</small>
+          ${hasSummary ? "<small>✨ AI study notes ready</small>" : ""}
         </div>
 
-        <button
-          class="action-button danger"
-          data-action="delete-document"
-          data-id="${escapeHTML(file.id)}"
-        >
-          Remove
-        </button>
+        <div class="button-row">
+          ${
+            hasSummary
+              ? `<button
+                   class="action-button"
+                   data-action="view-summary"
+                   data-id="${escapeHTML(file.id)}"
+                 >Summary</button>`
+              : ""
+          }
+
+          <button
+            class="action-button danger"
+            data-action="delete-document"
+            data-id="${escapeHTML(file.id)}"
+          >Remove</button>
+        </div>
       </div>
     `;
   }).join("");
@@ -575,49 +606,80 @@ function renderDocumentsPage() {
     </h1>
 
     <p class="page-subtitle">
-      Keep your study file list organised.
+      Upload your study materials and let Lunexa AI create revision notes.
     </p>
 
     <div class="card">
       <form id="documentForm" class="form-stack">
 
         <label class="form-label">
-          Choose a file
+          Choose your study file
+
           <input
             class="field"
             type="file"
             id="documentInput"
-            accept=".pdf,.txt,.docx,.pptx"
+            accept=".pdf,.txt,.docx"
+            required
+            ${documentRequestPending ? "disabled" : ""}
           >
         </label>
 
         <p class="small-text muted">
-          PDF, TXT, DOCX, PPTX · Maximum 10 MB.
+          PDF, TXT, DOCX · Maximum 5 MB per file.
         </p>
 
-        <button class="action-button primary" type="submit">
-          ＋ Add Document
+        <button
+          class="action-button primary"
+          type="submit"
+          ${documentRequestPending ? "disabled" : ""}
+        >
+          ${documentRequestPending ? "✨ Generating study notes..." : "✨ Upload & Summarize"}
         </button>
 
       </form>
     </div>
 
+    <div
+      id="documentSummary"
+      class="card"
+      style="display:${visibleDocumentSummaryId ? "block" : "none"};margin-top:20px"
+    >
+      ${getSummaryPlaceholder()}
+    </div>
+
     <h2 class="section-title">
-      Documents (${state.documents.length})
+      My Documents (${state.documents.length})
     </h2>
 
     <div class="list-stack">
-      ${items || '<div class="empty-state">📚<br>No documents added yet.</div>'}
+      ${items || '<div class="empty-state">📚<br>No documents uploaded yet.</div>'}
     </div>
 
     <p class="small-text muted">
-      This version saves file details only. AI file reading needs an additional backend feature.
+      Your summaries are saved in this browser. Upload the file again if you need to regenerate its summary.
     </p>
   `;
 }
 
-function saveDocument(event) {
+function getSummaryPlaceholder() {
+  return `
+    <h2 class="section-title">✨ Your AI Study Notes</h2>
+    <div class="document-summary-text"></div>
+    <button
+      class="action-button primary"
+      id="saveSummaryNote"
+      type="button"
+    >📝 Save as Study Notes</button>
+  `;
+}
+
+async function saveDocument(event) {
   event.preventDefault();
+
+  if (documentRequestPending) {
+    return;
+  }
 
   const file = $("#documentInput")?.files?.[0];
 
@@ -626,35 +688,189 @@ function saveDocument(event) {
     return;
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    showToast("The maximum file size is 10 MB.");
+  if (file.size === 0) {
+    showToast("This file is empty.");
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("Maximum file size is 5 MB.");
     return;
   }
 
   const extension = file.name.split(".").pop().toLowerCase();
 
-  if (!["pdf", "txt", "docx", "pptx"].includes(extension)) {
-    showToast("Unsupported file type.");
+  if (!["pdf", "txt", "docx"].includes(extension)) {
+    showToast("Upload a PDF, TXT, or DOCX file.");
     return;
   }
 
-  state.documents.unshift({
-    id: makeId(),
-    name: file.name,
-    size: formatBytes(file.size),
-    createdAt: new Date().toISOString()
-  });
-
-  saveData();
+  documentRequestPending = true;
   renderPage();
 
-  showToast("Document added.");
+  let generatedDocument = null;
+  let errorMessage = "";
+
+  try {
+    const formData = new FormData();
+
+    formData.append("file", file, file.name);
+
+    const response = await fetch("/api/summarize", {
+      method: "POST",
+      body: formData
+    });
+
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (error) {
+      throw new Error(
+        "The server returned an invalid response. Check your Vercel deployment."
+      );
+    }
+
+    if (!response.ok || data.success !== true) {
+      throw new Error(
+        data.error || "Could not summarize this document."
+      );
+    }
+
+    if (
+      typeof data.summary !== "string" ||
+      !data.summary.trim()
+    ) {
+      throw new Error("The AI returned an empty summary.");
+    }
+
+    generatedDocument = {
+      id: makeId(),
+      name: file.name,
+      size: formatBytes(file.size),
+      createdAt: new Date().toISOString(),
+      summary: data.summary.trim()
+    };
+
+    state.documents.unshift(generatedDocument);
+
+    saveData();
+
+  } catch (error) {
+    console.error("Lunexa document error:", error);
+
+    errorMessage =
+      error.message || "Document summarization failed.";
+
+  } finally {
+    documentRequestPending = false;
+  }
+
+  if (currentPage === "documents") {
+    if (generatedDocument) {
+      visibleDocumentSummaryId = generatedDocument.id;
+    }
+
+    renderPage();
+
+    if (generatedDocument) {
+      displayDocumentSummary(generatedDocument.summary);
+    }
+  }
+
+  if (errorMessage) {
+    showToast(errorMessage);
+    return;
+  }
+
+  if (generatedDocument) {
+    showToast("AI study notes generated! 💙");
+  }
+}
+
+function displayDocumentSummary(summary) {
+  const container = $("#documentSummary");
+
+  if (!container) {
+    return;
+  }
+
+  container.style.display = "block";
+  container.replaceChildren();
+
+  const heading = document.createElement("h2");
+
+  heading.className = "section-title";
+  heading.textContent = "✨ Your AI Study Notes";
+
+  const textContainer = document.createElement("div");
+
+  textContainer.className = "document-summary-text";
+  textContainer.style.whiteSpace = "pre-wrap";
+  textContainer.style.overflowWrap = "anywhere";
+  textContainer.textContent = summary;
+
+  const saveButton = document.createElement("button");
+
+  saveButton.className = "action-button primary";
+  saveButton.type = "button";
+  saveButton.textContent = "📝 Save as Study Notes";
+
+  saveButton.addEventListener("click", function () {
+    const noteId = makeId();
+
+    state.notes.unshift({
+      id: noteId,
+      title: "AI Notes - " + new Date().toLocaleDateString(),
+      content: summary,
+      createdAt: new Date().toISOString()
+    });
+
+    saveData();
+
+    showToast("Summary saved to Study Notes! 💙");
+  });
+
+  container.append(
+    heading,
+    textContainer,
+    saveButton
+  );
+
+  visibleDocumentSummaryId =
+    state.documents.find(function (file) {
+      return file.summary === summary;
+    })?.id || visibleDocumentSummaryId;
+}
+
+function viewDocumentSummary(id) {
+  const file = state.documents.find(function (item) {
+    return item.id === id;
+  });
+
+  if (!file || !file.summary) {
+    showToast("No summary available for this document.");
+    return;
+  }
+
+  visibleDocumentSummaryId = file.id;
+
+  displayDocumentSummary(file.summary);
+
+  $("#documentSummary")?.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
 }
 
 function deleteDocument(id) {
   state.documents = state.documents.filter(function (file) {
     return file.id !== id;
   });
+
+  if (visibleDocumentSummaryId === id) {
+    visibleDocumentSummaryId = null;
+  }
 
   saveData();
   renderPage();
@@ -667,7 +883,10 @@ function deleteDocument(id) {
 function isValidYouTubeURL(value) {
   try {
     const url = new URL(value);
-    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+
+    const host = url.hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
 
     if (
       ![
@@ -685,7 +904,10 @@ function isValidYouTubeURL(value) {
     }
 
     return (
-      (url.pathname === "/watch" && Boolean(url.searchParams.get("v"))) ||
+      (
+        url.pathname === "/watch" &&
+        Boolean(url.searchParams.get("v"))
+      ) ||
       /^\/(embed|shorts|live)\/[^/]+/.test(url.pathname)
     );
 
@@ -710,9 +932,7 @@ function renderYoutubePage() {
           class="action-button danger"
           data-action="delete-video"
           data-id="${escapeHTML(video.id)}"
-        >
-          Remove
-        </button>
+        >Remove</button>
       </div>
     `;
   }).join("");
@@ -767,7 +987,7 @@ function renderYoutubePage() {
     </div>
 
     <p class="small-text muted">
-      Transcript extraction and AI summaries are not connected in this version.
+      YouTube transcript extraction and AI summaries require a separate backend feature.
     </p>
   `;
 }
@@ -811,7 +1031,9 @@ function deleteVideo(id) {
 
 function renderGroupsPage() {
   const items = state.groups.map(function (group) {
-    const members = Array.isArray(group.members) ? group.members : [];
+    const members = Array.isArray(group.members)
+      ? group.members
+      : [];
 
     return `
       <div class="list-item">
@@ -828,17 +1050,13 @@ function renderGroupsPage() {
             class="action-button"
             data-action="copy-invite"
             data-id="${escapeHTML(group.id)}"
-          >
-            Invite
-          </button>
+          >Invite</button>
 
           <button
             class="action-button"
             data-action="open-group"
             data-id="${escapeHTML(group.id)}"
-          >
-            Open
-          </button>
+          >Open</button>
         </div>
       </div>
     `;
@@ -925,7 +1143,8 @@ function createGroup(event) {
     name: name,
     subject: subject,
     goal: goal,
-    code: "LNX-" + Math.random().toString(36).slice(2, 7).toUpperCase(),
+    code: "LNX-" +
+      Math.random().toString(36).slice(2, 7).toUpperCase(),
     members: ["You"],
     messages: [],
     createdAt: new Date().toISOString()
@@ -1088,17 +1307,13 @@ function openGroup(id) {
           class="action-button primary"
           data-action="copy-invite"
           data-id="${escapeHTML(group.id)}"
-        >
-          Invite Friends
-        </button>
+        >Invite Friends</button>
 
         <button
           class="action-button danger"
           data-action="delete-group"
           data-id="${escapeHTML(group.id)}"
-        >
-          Delete Group
-        </button>
+        >Delete Group</button>
       </div>
     </div>
 
@@ -1203,9 +1418,7 @@ function renderFriendsPage() {
           class="action-button danger"
           data-action="remove-friend"
           data-id="${escapeHTML(friend.id)}"
-        >
-          Remove
-        </button>
+        >Remove</button>
       </div>
     `;
   }).join("");
@@ -1258,9 +1471,7 @@ function renderFriendsPage() {
       <button
         class="action-button primary"
         data-action="share-lunexa"
-      >
-        Share Lunexa
-      </button>
+      >Share Lunexa</button>
     </div>
   `;
 }
@@ -1279,7 +1490,8 @@ function addFriend(event) {
   if (
     email &&
     state.friends.some(function (friend) {
-      return (friend.email || "").toLowerCase() === email.toLowerCase();
+      return (friend.email || "").toLowerCase() ===
+        email.toLowerCase();
     })
   ) {
     showToast("Friend already exists.");
@@ -1411,9 +1623,7 @@ function renderQuizPage() {
         id="nextQuestion"
         data-action="next-quiz"
         style="display:none;margin-top:15px"
-      >
-        Next Question →
-      </button>
+      >Next Question →</button>
     </div>
 
     <div class="card" style="margin-top:20px">
@@ -1427,9 +1637,7 @@ function renderQuizPage() {
         class="action-button"
         data-action="flip-card"
         data-state="question"
-      >
-        Show answer
-      </button>
+      >Show answer</button>
     </div>
   `;
 }
@@ -1486,7 +1694,9 @@ function nextQuiz() {
     return;
   }
 
-  activeQuiz = (activeQuiz + 1) % quizQuestions.length;
+  activeQuiz =
+    (activeQuiz + 1) % quizQuestions.length;
+
   quizAnswered = false;
 
   renderPage();
@@ -1532,9 +1742,7 @@ function renderHistoryPage() {
           class="action-button"
           data-action="restore-chat"
           data-id="${escapeHTML(chat.id)}"
-        >
-          Open
-        </button>
+        >Open</button>
       </div>
     `;
   }).join("");
@@ -1556,9 +1764,7 @@ function renderHistoryPage() {
       class="action-button primary"
       data-action="new-chat"
       style="margin-top:20px"
-    >
-      ＋ New Chat
-    </button>
+    >＋ New Chat</button>
   `;
 }
 
@@ -1611,9 +1817,10 @@ document.addEventListener("click", function (event) {
     case "toggle-theme":
       document.body.classList.toggle("light-theme");
 
-      state.theme = document.body.classList.contains("light-theme")
-        ? "light"
-        : "dark";
+      state.theme =
+        document.body.classList.contains("light-theme")
+          ? "light"
+          : "dark";
 
       saveData();
       break;
@@ -1628,6 +1835,10 @@ document.addEventListener("click", function (event) {
 
     case "delete-document":
       deleteDocument(id);
+      break;
+
+    case "view-summary":
+      viewDocumentSummary(id);
       break;
 
     case "delete-video":
@@ -1780,9 +1991,11 @@ function initialiseApp() {
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initialiseApp, {
-    once: true
-  });
+  document.addEventListener(
+    "DOMContentLoaded",
+    initialiseApp,
+    { once: true }
+  );
 } else {
   initialiseApp();
 }
