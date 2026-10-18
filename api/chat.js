@@ -5,7 +5,7 @@ const { GoogleGenAI } = require("@google/genai");
 module.exports = async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
 
-  // Only allow POST requests
+  // Allow POST requests only
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
 
@@ -15,21 +15,24 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Read API key securely from Vercel
+  // Check Gemini API key
   const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
+  if (!apiKey || !apiKey.trim()) {
+    console.error("LUNEXA_ERROR: GEMINI_API_KEY is missing.");
+
     return res.status(500).json({
       success: false,
-      error: "GEMINI_API_KEY is missing from Vercel Environment Variables."
+      error:
+        "Gemini API key is missing. Add GEMINI_API_KEY in Vercel Environment Variables."
     });
   }
 
   try {
+    // Read user message
     const body = req.body || {};
     const message = body.message;
 
-    // Validate message
     if (typeof message !== "string" || !message.trim()) {
       return res.status(400).json({
         success: false,
@@ -40,88 +43,74 @@ module.exports = async function handler(req, res) {
     if (message.length > 10000) {
       return res.status(400).json({
         success: false,
-        error: "Your message is too long. Maximum 10000 characters."
+        error: "Your message is too long. Please keep it under 10,000 characters."
       });
     }
 
-    // Connect to Gemini
+    // Initialize Gemini
     const ai = new GoogleGenAI({
-      apiKey: apiKey
+      apiKey: apiKey.trim()
     });
 
+    // Generate AI response
     const result = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: message.trim(),
       config: {
-        systemInstruction:
-          "You are Lunexa AI, a friendly and intelligent AI study companion. " +
-          "Help students understand difficult concepts in simple language. " +
-          "Give accurate explanations, examples, and step-by-step solutions. " +
-          "Create useful study notes and help with exam preparation. " +
-          "Use headings and bullet points when helpful. " +
-          "Be friendly, supportive, and honest when uncertain."
+        systemInstruction: `
+You are Lunexa AI, a friendly and intelligent AI study companion.
+
+Your responsibilities:
+1. Explain difficult concepts in simple language.
+2. Help students prepare for college exams.
+3. Provide step-by-step solutions for mathematics and programming.
+4. Create study notes with headings and examples.
+5. Help with Python, Java, JavaScript, HTML, CSS, SQL, statistics, and AI.
+6. Summarize educational topics clearly.
+7. Generate practice questions and quizzes when requested.
+8. Use readable formatting and bullet points.
+9. Be supportive, accurate, and student-friendly.
+10. If you are unsure about something, be honest.
+
+Respond directly to the student's question.
+        `.trim()
       }
     });
 
+    // Extract response
     const answer = result.text;
 
     if (typeof answer !== "string" || !answer.trim()) {
+      console.error("LUNEXA_ERROR: Gemini returned an empty response.");
+
       return res.status(502).json({
         success: false,
-        error: "Gemini returned an empty answer. Please try again."
+        error: "Gemini returned an empty response. Please try again."
       });
     }
 
-    // Successful response
+    // Send successful response
     return res.status(200).json({
       success: true,
       reply: answer.trim()
     });
 
   } catch (error) {
-    // Log the real error in Vercel Function Logs
-    console.error("LUNEXA_GEMINI_ERROR:", {
-      message: error.message,
-      status: error.status,
-      code: error.code
-    });
+    // Log the actual error in Vercel function logs
+    console.error(
+      "LUNEXA_GEMINI_ERROR:",
+      error?.message || error
+    );
 
-    // Return a useful diagnostic message
-    const errorMessage = String(error.message || "");
-
-    if (
-      error.status === 401 ||
-      error.status === 403 ||
-      /api key|permission denied|unauthorized|forbidden/i.test(errorMessage)
-    ) {
-      return res.status(401).json({
-        success: false,
-        error: "Gemini API key is invalid or does not have permission. Check your Google AI Studio API key."
-      });
-    }
-
-    if (
-      error.status === 429 ||
-      /quota|rate limit|resource exhausted/i.test(errorMessage)
-    ) {
-      return res.status(429).json({
-        success: false,
-        error: "Gemini API quota or rate limit reached. Please try again later."
-      });
-    }
-
-    if (
-      /model not found|not supported/i.test(errorMessage)
-    ) {
-      return res.status(502).json({
-        success: false,
-        error: "The Gemini model is unavailable for this API key. Check the model name and API access."
-      });
-    }
+    // Temporary debugging response
+    const errorMessage =
+      typeof error?.message === "string"
+        ? error.message
+        : "Unknown Gemini API error";
 
     return res.status(500).json({
       success: false,
-      error: "Gemini request failed. Open Vercel Runtime Logs to see the actual error."
+      error: errorMessage
     });
   }
 };
