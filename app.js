@@ -1,1103 +1,1756 @@
 "use strict";
 
-/* ==========================================
-   LUNEXA AI — FRONTEND APPLICATION
-========================================== */
+/* =========================================
+   LUNEXA AI - APPLICATION
+   Frontend demo with local storage
+========================================= */
 
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => document.querySelectorAll(selector);
+const $ = (selector, root = document) =>
+  root.querySelector(selector);
 
+const STORAGE_KEY = "lunexa_app_v2";
 
-/* ==========================================
-   STATE
-========================================== */
-
-const state = {
-    currentPage: "chat",
-    messages: [],
-    selectedFile: null,
-    toastTimer: null,
-    speechTimer: null,
-    savedItems: [],
-    activities: []
-};
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-const ALLOWED_EXTENSIONS = [
-    "pdf",
-    "txt",
-    "docx",
-    "pptx"
-];
-
-const PAGE_INFO = {
-    chat: {
-        title: "AI Assistant",
-        heading: "Your AI Study Assistant",
-        description: "Chat with Luna and explore your ideas.",
-        icon: "✦"
-    },
-
-    documents: {
-        title: "My Documents",
-        heading: "Your Study Documents",
-        description: "Choose a document to prepare it for your study workflow.",
-        icon: "▤"
-    },
-
-    notes: {
-        title: "Smart Notes",
-        heading: "Let's Create Smart Notes",
-        description: "Organize topics into clear, structured study notes.",
-        icon: "✎"
-    },
-
-    youtube: {
-        title: "YouTube Study",
-        heading: "Turn Lectures Into Study Material",
-        description: "Prepare a YouTube lecture for transcript-based summarization.",
-        icon: "▷"
-    },
-
-    quiz: {
-        title: "Quiz & Flashcards",
-        heading: "Practice Makes Progress",
-        description: "Prepare a topic for quizzes and revision flashcards.",
-        icon: "◎"
-    },
-
-    library: {
-        title: "Study Library",
-        heading: "Your Personal Study Library",
-        description: "Keep track of your study material in this browser.",
-        icon: "▣"
-    },
-
-    history: {
-        title: "Recent Chats",
-        heading: "Your Recent Conversations",
-        description: "Review the conversations stored during this session.",
-        icon: "◷"
-    }
-};
-
-
-/* ==========================================
-   DOM REFERENCES
-========================================== */
-
+const pageContainer = $("#pageContainer");
+const pageHeading = $("#pageHeading");
 const sidebar = $("#sidebar");
-const overlay = $("#overlay");
-const menuButton = $("#menuButton");
-const closeSidebar = $("#closeSidebar");
-
-const pageTitle = $("#pageTitle");
-const pageContent = $("#pageContent");
-
-const chatInput = $("#chatInput");
-const sendButton = $("#sendButton");
-const conversation = $("#conversation");
-
-const assistantCharacter = $("#assistantCharacter");
-const assistantSpeech = $("#assistantSpeech");
-const speechTitle = $("#speechTitle");
-const speechText = $("#speechText");
-const characterMouth = $("#characterMouth");
-
-const fileInput = $("#fileInput");
-const attachButton = $("#attachButton");
-
-const characterCount = $("#characterCount");
 const toastElement = $("#toast");
 
+let toastTimer = null;
+let currentPage = "chat";
+let selectedFile = null;
+let activeQuiz = 0;
+let quizAnswered = false;
 
-/* ==========================================
-   UTILITIES
-========================================== */
+
+/* ---------- SAFE STORAGE ---------- */
+
+function loadData() {
+  const defaults = {
+    messages: [],
+    notes: [],
+    documents: [],
+    videos: [],
+    groups: [],
+    friends: [],
+    chats: [],
+    theme: "dark"
+  };
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) return defaults;
+
+    const parsed = JSON.parse(saved);
+
+    return {
+      ...defaults,
+      ...parsed
+    };
+  } catch (error) {
+    console.error("Could not load saved data:", error);
+    return defaults;
+  }
+}
+
+const state = loadData();
+
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  } catch (error) {
+    console.error("Could not save data:", error);
+
+    showToast(
+      "Storage is full. Try removing large documents."
+    );
+
+    return false;
+  }
+}
+
+
+/* ---------- HELPERS ---------- */
 
 function escapeHTML(value) {
-    return String(value).replace(/[&<>"']/g, (character) => {
-        const entities = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#39;"
-        };
+  return String(value ?? "").replace(/[&<>"']/g, function (char) {
+    const replacements = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
 
-        return entities[character];
-    });
+    return replacements[char];
+  });
 }
 
+function makeId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  return Date.now().toString(36) +
+    Math.random().toString(36).slice(2, 9);
+}
 
 function showToast(message) {
-    toastElement.textContent = message;
-    toastElement.classList.add("show");
+  if (!toastElement) return;
 
-    clearTimeout(state.toastTimer);
+  toastElement.textContent = message;
+  toastElement.classList.add("show");
 
-    state.toastTimer = setTimeout(() => {
-        toastElement.classList.remove("show");
-    }, 3000);
+  clearTimeout(toastTimer);
+
+  toastTimer = setTimeout(function () {
+    toastElement.classList.remove("show");
+  }, 2600);
 }
 
-
-function closeMobileSidebar() {
-    sidebar.classList.remove("open");
-    overlay.classList.remove("show");
+function formatDate(value) {
+  return new Date(value).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
 }
-
-
-function openMobileSidebar() {
-    sidebar.classList.add("open");
-    overlay.classList.add("show");
-}
-
-
-function isMobile() {
-    return window.matchMedia("(max-width: 760px)").matches;
-}
-
-
-function saveActivity(message) {
-    state.activities.unshift({
-        message,
-        time: new Date().toLocaleString()
-    });
-
-    state.activities = state.activities.slice(0, 30);
-}
-
 
 function formatBytes(bytes) {
-    if (bytes < 1024) {
-        return bytes + " B";
-    }
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) {
+    return (bytes / 1024).toFixed(1) + " KB";
+  }
 
-    if (bytes < 1024 * 1024) {
-        return (bytes / 1024).toFixed(1) + " KB";
-    }
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
 
-    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+function setBuddyMessage(message) {
+  const speech = $("#buddySpeech");
+  const description = $("#buddyDescription");
+
+  if (speech) speech.textContent = message;
+  if (description) description.textContent = message;
+}
+
+function setBuddyForPage(page) {
+  const messages = {
+    chat: "Hey bestie! Ask me anything. 💙",
+    notes: "Let's turn your ideas into beautiful notes! 📝",
+    documents: "Let's organise your study materials! 📚",
+    youtube: "Ready to learn from your favourite lectures? 🎬",
+    quiz: "Time to test what you've learned! 🎯",
+    groups: "Studying together makes learning fun! 💙",
+    friends: "Invite your friends and learn together! ♡",
+    history: "Your previous study sessions are right here. ✨"
+  };
+
+  setBuddyMessage(messages[page] || messages.chat);
 }
 
 
-/* ==========================================
-   ASSISTANT ANIMATIONS
-========================================== */
-
-function setAssistantState(mode, title, message) {
-    assistantCharacter.classList.remove(
-        "thinking",
-        "typing",
-        "success",
-        "error"
-    );
-
-    if (mode && mode !== "idle") {
-        assistantCharacter.classList.add(mode);
-    }
-
-    speechTitle.textContent = title;
-    speechText.textContent = message;
-}
-
-
-function resetAssistant() {
-    setAssistantState(
-        "idle",
-        "Hi, bestie!",
-        "What are we learning today? 💙"
-    );
-}
-
-
-function assistantThinking() {
-    setAssistantState(
-        "thinking",
-        "Thinking...",
-        "Let me organize my thoughts! ✨"
-    );
-}
-
-
-function assistantTyping() {
-    setAssistantState(
-        "typing",
-        "I'm listening!",
-        "Tell me what you want to learn. 💙"
-    );
-}
-
-
-/* ==========================================
-   CHAT MESSAGES
-========================================== */
-
-function createMessage(role, message, fileName) {
-    const wrapper = document.createElement("div");
-
-    wrapper.className = "message " +
-        (role === "user" ? "user-message" : "assistant-message");
-
-    const avatar = document.createElement("div");
-    avatar.className = "message-avatar";
-    avatar.textContent = role === "user" ? "K" : "L";
-
-    const content = document.createElement("div");
-    content.className = "message-content";
-
-    const name = document.createElement("div");
-    name.className = "message-name";
-
-    if (role === "assistant") {
-        name.innerHTML =
-            'Luna <span class="ai-label">AI COMPANION</span>';
-    } else {
-        name.textContent = "You";
-    }
-
-    const bubble = document.createElement("div");
-    bubble.className = "message-bubble";
-
-    bubble.textContent = message;
-
-    if (fileName) {
-        const fileChip = document.createElement("div");
-        fileChip.className = "file-chip";
-        fileChip.textContent = "📎 " + fileName;
-        bubble.appendChild(document.createElement("br"));
-        bubble.appendChild(fileChip);
-    }
-
-    content.appendChild(name);
-    content.appendChild(bubble);
-
-    wrapper.appendChild(avatar);
-    wrapper.appendChild(content);
-
-    conversation.appendChild(wrapper);
-
-    wrapper.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest"
-    });
-
-    return wrapper;
-}
-
-
-function addUserMessage(message, fileName) {
-    createMessage("user", message, fileName);
-
-    state.messages.push({
-        role: "user",
-        content: message,
-        fileName: fileName || null,
-        time: new Date().toISOString()
-    });
-
-    saveActivity("Sent a message");
-}
-
-
-function addAssistantMessage(message) {
-    createMessage("assistant", message);
-
-    state.messages.push({
-        role: "assistant",
-        content: message,
-        time: new Date().toISOString()
-    });
-}
-
-
-/* ==========================================
-   CHAT PREVIEW
-========================================== */
-
-function getPreviewResponse(message) {
-    const lower = message.toLowerCase();
-
-    if (
-        lower.includes("hello") ||
-        lower.includes("hi ") ||
-        lower === "hi" ||
-        lower.includes("hey")
-    ) {
-        return "Heyyy! 💙 I'm Luna, your study companion. " +
-            "Our chat interface is working! Once the AI backend " +
-            "is connected, I'll be able to generate real answers.";
-    }
-
-    if (lower.includes("note")) {
-        return "Your Smart Notes workspace is ready! ✨ " +
-            "We'll connect the AI backend to generate actual notes " +
-            "from your topics and study documents.";
-    }
-
-    if (lower.includes("quiz") || lower.includes("flashcard")) {
-        return "Your quiz workspace is ready! 🧠 " +
-            "In the next stages, we'll connect an AI model to " +
-            "generate questions, answers and flashcards.";
-    }
-
-    if (
-        lower.includes("document") ||
-        lower.includes("pdf") ||
-        lower.includes("file")
-    ) {
-        return "I can see you're interested in study documents! 📚 " +
-            "File selection is available in this preview. " +
-            "We'll implement secure server-side text extraction next.";
-    }
-
-    return "I received your message! 💙 " +
-        "The Lunexa interface is working, but real AI responses " +
-        "are not connected yet. Our next stage will connect the " +
-        "backend so I can answer your questions using an AI model.";
-}
-
-
-function sendMessage(customMessage) {
-    const message = typeof customMessage === "string"
-        ? customMessage.trim()
-        : chatInput.value.trim();
-
-    if (!message && !state.selectedFile) {
-        showToast("Type a message or select a document first. 💙");
-        chatInput.focus();
-        return;
-    }
-
-    if (message.length > 5000) {
-        showToast("Your message is too long.");
-        return;
-    }
-
-    const fileName = state.selectedFile
-        ? state.selectedFile.name
-        : null;
-
-    const userMessage = message ||
-        "I selected a document: " + fileName;
-
-    addUserMessage(userMessage, fileName);
-
-    chatInput.value = "";
-    chatInput.style.height = "auto";
-
-    characterCount.textContent = "0 / 5000";
-
-    state.selectedFile = null;
-    fileInput.value = "";
-
-    attachButton.textContent = "＋";
-    attachButton.title = "Attach a document";
-
-    assistantThinking();
-
-    sendButton.disabled = true;
-
-    window.setTimeout(() => {
-        const response = getPreviewResponse(userMessage);
-
-        addAssistantMessage(response);
-
-        setAssistantState(
-            "success",
-            "There we go! ✨",
-            "Your message reached the interface!"
-        );
-
-        sendButton.disabled = false;
-        chatInput.focus();
-    }, 800);
-}
-
-
-/* ==========================================
-   NEW CHAT
-========================================== */
-
-function newChat() {
-    conversation.innerHTML = `
-        <div class="conversation-divider">
-            <span>YOUR CONVERSATION</span>
-        </div>
-    `;
-
-    state.messages = [];
-    state.selectedFile = null;
-
-    chatInput.value = "";
-    fileInput.value = "";
-
-    characterCount.textContent = "0 / 5000";
-
-    setAssistantState(
-        "idle",
-        "Fresh start! 🦋",
-        "A new conversation, a new adventure."
-    );
-
-    closeMobileSidebar();
-
-    if (state.currentPage !== "chat") {
-        navigateTo("chat");
-    }
-
-    chatInput.focus();
-}
-
-
-/* ==========================================
-   FILE SELECTION
-========================================== */
-
-function handleFileSelection(event) {
-    const file = event.target.files[0];
-
-    if (!file) {
-        return;
-    }
-
-    const extension = file.name
-        .split(".")
-        .pop()
-        .toLowerCase();
-
-    if (!ALLOWED_EXTENSIONS.includes(extension)) {
-        showToast("Choose a PDF, TXT, DOCX or PPTX file.");
-        fileInput.value = "";
-        return;
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-        showToast("The file must be smaller than 10 MB.");
-        fileInput.value = "";
-        return;
-    }
-
-    if (file.size === 0) {
-        showToast("This file appears to be empty.");
-        fileInput.value = "";
-        return;
-    }
-
-    state.selectedFile = file;
-
-    attachButton.textContent = "✓";
-    attachButton.title = file.name;
-
-    assistantTyping();
-
-    showToast(
-        "Selected: " + file.name +
-        " (" + formatBytes(file.size) + ")"
-    );
-
-    chatInput.focus();
-}
-
-
-/* ==========================================
-   NAVIGATION
-========================================== */
+/* ---------- NAVIGATION ---------- */
+
+const pageNames = {
+  chat: "AI Chat",
+  notes: "Study Notes",
+  documents: "Documents",
+  youtube: "YouTube Study",
+  quiz: "Quiz & Flashcards",
+  groups: "Group Study",
+  friends: "Friends",
+  history: "Chat History"
+};
 
 function navigateTo(page) {
-    if (!PAGE_INFO[page]) {
-        return;
-    }
+  if (!Object.prototype.hasOwnProperty.call(pageNames, page)) {
+    showToast("This page is not available.");
+    return;
+  }
 
-    state.currentPage = page;
+  currentPage = page;
 
-    pageTitle.textContent = PAGE_INFO[page].title;
+  if (pageHeading) {
+    pageHeading.textContent = pageNames[page];
+  }
 
-    $$(".nav-item").forEach((item) => {
-        item.classList.toggle(
-            "active",
-            item.dataset.page === page
-        );
-    });
+  document.querySelectorAll(".nav-item").forEach(function (item) {
+    item.classList.toggle(
+      "active",
+      item.dataset.page === page
+    );
+  });
 
-    closeMobileSidebar();
+  if (sidebar) sidebar.classList.remove("open");
 
-    if (page === "chat") {
-        renderChatPage();
-        return;
-    }
+  renderPage();
+  setBuddyForPage(page);
 
-    renderFeaturePage(page);
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
+function renderPage() {
+  if (!pageContainer) return;
+
+  const renderers = {
+    chat: renderChatPage,
+    notes: renderNotesPage,
+    documents: renderDocumentsPage,
+    youtube: renderYoutubePage,
+    quiz: renderQuizPage,
+    groups: renderGroupsPage,
+    friends: renderFriendsPage,
+    history: renderHistoryPage
+  };
+
+  const renderer = renderers[currentPage] || renderChatPage;
+
+  pageContainer.innerHTML = renderer();
+}
+
+
+/* ---------- CHAT ---------- */
 
 function renderChatPage() {
-    pageContent.innerHTML = `
-        <section class="chat-page" id="chatPage">
-
-            <div class="welcome-section">
-                <div class="welcome-badge">
-                    <span>✦</span>
-                    YOUR PERSONAL AI STUDY COMPANION
-                </div>
-
-                <h1>
-                    Welcome back, learner!<br>
-                    <span>What shall we explore today?</span>
-                </h1>
-
-                <p class="welcome-description">
-                    Ask questions, explore topics and make
-                    learning a little more magical.
-                </p>
-            </div>
-
-            <div class="feature-panel">
-                <strong>Chat workspace</strong>
-
-                <p class="feature-hint">
-                    Your previous messages remain available
-                    in this session through Recent Chats.
-                    Start a new conversation to clear this view.
-                </p>
-
-                <button class="primary-button" id="returnToChat">
-                    Continue conversation
-                </button>
-            </div>
-
-        </section>
+  const messagesHTML = state.messages.map(function (message) {
+    return `
+      <div class="message ${message.role === "user" ? "user" : "assistant"}">
+        <span class="message-label">
+          ${message.role === "user" ? "You" : "Lunexa"}
+        </span>
+        ${escapeHTML(message.text)}
+      </div>
     `;
+  }).join("");
 
-    $("#returnToChat").addEventListener("click", () => {
-        navigateTo("chat");
-        showToast("You're in your chat workspace. 💙");
+  return `
+    <div class="chat-layout">
+
+      <div class="chat-welcome">
+        <div class="eyebrow">YOUR PERSONAL STUDY COMPANION</div>
+
+        <h1>
+          Hey there! 👋<br>
+          What are we learning
+          <span class="gradient-text">today?</span>
+        </h1>
+
+        <p>
+          I'm Lunexa, your study buddy. Explore new concepts,
+          organise your notes, and make studying easier.
+        </p>
+
+        <div class="feature-grid">
+
+          <button class="feature-card" data-action="prompt"
+                  data-prompt="Explain machine learning in simple words.">
+            <span class="feature-icon">🧠</span>
+            <strong>Explain a topic</strong>
+            <small>Make difficult concepts simple.</small>
+          </button>
+
+          <button class="feature-card" data-page="notes">
+            <span class="feature-icon">📝</span>
+            <strong>Create study notes</strong>
+            <small>Organise your learning.</small>
+          </button>
+
+          <button class="feature-card" data-page="quiz">
+            <span class="feature-icon">🎯</span>
+            <strong>Test your knowledge</strong>
+            <small>Practise with a quiz.</small>
+          </button>
+
+          <button class="feature-card" data-page="groups">
+            <span class="feature-icon">👥</span>
+            <strong>Study with friends</strong>
+            <small>Create a group and invite friends.</small>
+          </button>
+
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        ${messagesHTML}
+      </div>
+
+      <form class="chat-composer" id="chatForm">
+
+        <textarea
+          id="chatInput"
+          rows="1"
+          maxlength="4000"
+          placeholder="Ask Lunexa anything..."
+          aria-label="Your message"
+          required
+        ></textarea>
+
+        <button class="send-button" type="submit"
+                aria-label="Send message">➤</button>
+
+      </form>
+
+      <div class="chat-footnote">
+        Lunexa currently uses demo replies. Connect an AI backend
+        for real AI-generated answers.
+      </div>
+
+    </div>
+  `;
+}
+
+function getDemoReply(message) {
+  const text = message.toLowerCase();
+
+  if (text.includes("hello") || text.includes("hi ")) {
+    return "Hey bestie! 💙 What would you like to learn today?";
+  }
+
+  if (text.includes("machine learning")) {
+    return [
+      "🧠 Machine Learning — Simple Explanation",
+      "",
+      "Machine Learning (ML) is a branch of AI that helps computers learn patterns from data.",
+      "",
+      "Example: An email app can learn to identify spam by examining examples of spam and normal emails.",
+      "",
+      "Main types:",
+      "1. Supervised learning — learns from labelled examples.",
+      "2. Unsupervised learning — discovers patterns in data.",
+      "3. Reinforcement learning — learns through rewards and penalties.",
+      "",
+      "Exam tip: Include a definition, types, and one real-life example."
+    ].join("\n");
+  }
+
+  if (text.includes("study plan")) {
+    return [
+      "📚 Your sample study plan",
+      "",
+      "1. Study for 25 minutes.",
+      "2. Take a 5-minute break.",
+      "3. Revise the important points.",
+      "4. Practise five questions.",
+      "5. Review what you learned before sleeping.",
+      "",
+      "Tell me your subjects and available time to customise this plan."
+    ].join("\n");
+  }
+
+  if (text.includes("note")) {
+    return "📝 Let's create your study notes! Open Study Notes from the sidebar, enter your topic, and save your notes. I can provide demo guidance until the real AI backend is connected.";
+  }
+
+  if (text.includes("quiz")) {
+    return "🎯 Ready to practise? Open Quiz & Flashcards from the sidebar to try the sample interactive quiz.";
+  }
+
+  return [
+    "Hey bestie! 💙",
+    "",
+    "I received your message:",
+    '"' + message + '"',
+    "",
+    "This version is running in demo mode, so I can't generate a real AI answer yet.",
+    "",
+    "You can still explore Study Notes, Documents, YouTube Study, Quizzes, and Group Study.",
+    "",
+    "Our next backend step will connect Lunexa to an AI model for real answers."
+  ].join("\n");
+}
+
+function addMessage(role, text) {
+  state.messages.push({
+    id: makeId(),
+    role: role,
+    text: text,
+    createdAt: new Date().toISOString()
+  });
+
+  if (state.messages.length > 100) {
+    state.messages = state.messages.slice(-100);
+  }
+
+  saveData();
+}
+
+function sendChatMessage(text) {
+  const message = String(text || "").trim();
+
+  if (!message) {
+    showToast("Please type a message first.");
+    return;
+  }
+
+  addMessage("user", message);
+  addMessage("assistant", getDemoReply(message));
+
+  renderPage();
+  setBuddyMessage("Nice question! Keep being curious. 💙");
+
+  const input = $("#chatInput");
+
+  if (input) input.focus();
+}
+
+function startNewChat() {
+  if (state.messages.length) {
+    state.chats.unshift({
+      id: makeId(),
+      title: state.messages.find(function (m) {
+        return m.role === "user";
+      })?.text.slice(0, 55) || "Study session",
+      messages: state.messages.slice(),
+      createdAt: new Date().toISOString()
     });
+
+    state.chats = state.chats.slice(0, 30);
+  }
+
+  state.messages = [];
+  saveData();
+
+  navigateTo("chat");
+  showToast("New chat started! ✨");
 }
 
 
-/* ==========================================
-   FEATURE PAGES
-========================================== */
+/* ---------- STUDY NOTES ---------- */
 
-function renderFeaturePage(page) {
-    const info = PAGE_INFO[page];
+function renderNotesPage() {
+  const list = state.notes.map(function (note) {
+    return `
+      <div class="list-item">
+        <div class="list-icon">📝</div>
 
-    let panel = "";
+        <div class="list-item-content">
+          <strong>${escapeHTML(note.title)}</strong>
+          <small>${escapeHTML(note.content.slice(0, 130))}</small>
+          <small>Saved ${formatDate(note.createdAt)}</small>
+        </div>
 
-    if (page === "documents") {
-        panel = `
-            <div class="feature-panel">
-                <label for="documentUpload">
-                    Select a study document
-                </label>
-
-                <input
-                    type="file"
-                    id="documentUpload"
-                    accept=".pdf,.txt,.docx,.pptx"
-                >
-
-                <p class="feature-hint">
-                    Maximum file size: 10 MB.
-                    Real text extraction and document Q&A
-                    will be added with the backend.
-                </p>
-
-                <div class="result-box" id="documentResult" hidden></div>
-            </div>
-        `;
-    }
-
-    if (page === "notes") {
-        panel = `
-            <div class="feature-panel">
-                <label for="noteTopic">What topic are you studying?</label>
-
-                <input
-                    id="noteTopic"
-                    type="text"
-                    maxlength="200"
-                    placeholder="e.g. Machine Learning"
-                >
-
-                <label for="noteFormat">Notes format</label>
-
-                <select id="noteFormat">
-                    <option value="Exam-ready notes">Exam-ready notes</option>
-                    <option value="Short summary">Short summary</option>
-                    <option value="Detailed explanation">Detailed explanation</option>
-                    <option value="Revision points">Revision points</option>
-                </select>
-
-                <button class="primary-button" id="createNotes">
-                    Prepare notes request
-                </button>
-
-                <div class="result-box" id="notesResult" hidden></div>
-
-                <p class="feature-hint">
-                    This preview prepares your request.
-                    AI-generated notes will be enabled after
-                    backend integration.
-                </p>
-            </div>
-        `;
-    }
-
-    if (page === "youtube") {
-        panel = `
-            <div class="feature-panel">
-                <label for="youtubeUrl">YouTube video URL</label>
-
-                <input
-                    id="youtubeUrl"
-                    type="url"
-                    placeholder="https://www.youtube.com/watch?v=..."
-                >
-
-                <button class="primary-button" id="prepareVideo">
-                    Prepare video request
-                </button>
-
-                <div class="result-box" id="videoResult" hidden></div>
-
-                <p class="feature-hint">
-                    A video link alone does not provide its transcript.
-                    We'll implement transcript retrieval and summarization
-                    where access is available.
-                </p>
-            </div>
-        `;
-    }
-
-    if (page === "quiz") {
-        panel = `
-            <div class="feature-panel">
-                <label for="quizTopic">Quiz topic</label>
-
-                <input
-                    id="quizTopic"
-                    type="text"
-                    maxlength="200"
-                    placeholder="Enter a topic to practice"
-                >
-
-                <label for="quizCount">Number of questions</label>
-
-                <select id="quizCount">
-                    <option value="5">5 questions</option>
-                    <option value="10">10 questions</option>
-                    <option value="15">15 questions</option>
-                </select>
-
-                <button class="primary-button" id="prepareQuiz">
-                    Prepare quiz request
-                </button>
-
-                <div class="result-box" id="quizResult" hidden></div>
-
-                <p class="feature-hint">
-                    Real question generation and answer checking
-                    will be connected to the AI backend.
-                </p>
-            </div>
-        `;
-    }
-
-    if (page === "library") {
-        const items = state.savedItems.map((item) => `
-            <div class="result-box">
-                <strong>${escapeHTML(item.type)}</strong>
-                <p>${escapeHTML(item.title)}</p>
-                <small>${escapeHTML(item.time)}</small>
-            </div>
-        `).join("");
-
-        panel = items || `
-            <div class="library-empty">
-                <div style="font-size: 30px;">▣</div>
-                <strong>Your library is waiting!</strong>
-                <p>Items you save in this session will appear here.</p>
-            </div>
-        `;
-    }
-
-    if (page === "history") {
-        const items = state.activities.map((item) => `
-            <div class="result-box">
-                <strong>${escapeHTML(item.message)}</strong>
-                <p>${escapeHTML(item.time)}</p>
-            </div>
-        `).join("");
-
-        panel = items || `
-            <div class="library-empty">
-                <div style="font-size: 30px;">◷</div>
-                <strong>No recent activities yet.</strong>
-                <p>Start chatting to see activity here.</p>
-            </div>
-        `;
-    }
-
-    pageContent.innerHTML = `
-        <section class="feature-page">
-
-            <div class="feature-icon">${info.icon}</div>
-
-            <h1>${info.heading}</h1>
-
-            <p>${info.description}</p>
-
-            ${panel}
-
-        </section>
+        <button class="action-button danger"
+                data-action="delete-note"
+                data-id="${escapeHTML(note.id)}">
+          Delete
+        </button>
+      </div>
     `;
+  }).join("");
 
-    bindFeatureEvents(page);
+  return `
+    <h1 class="page-heading">Study <span class="gradient-text">Notes</span></h1>
+    <p class="page-subtitle">
+      Capture your ideas and keep your study material organised.
+    </p>
+
+    <div class="card">
+      <form id="noteForm" class="form-stack">
+
+        <label class="form-label">
+          Note title
+          <input class="field" id="noteTitle"
+                 maxlength="120"
+                 placeholder="Example: Machine Learning Basics"
+                 required>
+        </label>
+
+        <label class="form-label">
+          Your notes
+          <textarea class="textarea-field" id="noteContent"
+                    maxlength="20000"
+                    placeholder="Write your study notes here..."
+                    required></textarea>
+        </label>
+
+        <button class="action-button primary" type="submit">
+          ＋ Save Notes
+        </button>
+
+      </form>
+    </div>
+
+    <h2 class="section-title">Your saved notes (${state.notes.length})</h2>
+
+    <div class="list-stack">
+      ${list || '<div class="empty-state">📝<br>No notes yet.<br>Create your first study note above!</div>'}
+    </div>
+  `;
+}
+
+function saveNote(event) {
+  event.preventDefault();
+
+  const title = $("#noteTitle")?.value.trim();
+  const content = $("#noteContent")?.value.trim();
+
+  if (!title || !content) {
+    showToast("Please enter a title and notes.");
+    return;
+  }
+
+  state.notes.unshift({
+    id: makeId(),
+    title: title,
+    content: content,
+    createdAt: new Date().toISOString()
+  });
+
+  saveData();
+  renderPage();
+  showToast("Your notes have been saved! 💙");
+}
+
+function deleteNote(id) {
+  state.notes = state.notes.filter(function (note) {
+    return note.id !== id;
+  });
+
+  saveData();
+  renderPage();
+  showToast("Note deleted.");
 }
 
 
-/* ==========================================
-   FEATURE EVENT HANDLERS
-========================================== */
+/* ---------- DOCUMENTS ---------- */
 
-function bindFeatureEvents(page) {
+function renderDocumentsPage() {
+  const list = state.documents.map(function (file) {
+    return `
+      <div class="list-item">
+        <div class="list-icon">📄</div>
 
-    if (page === "documents") {
-        const input = $("#documentUpload");
+        <div class="list-item-content">
+          <strong>${escapeHTML(file.name)}</strong>
+          <small>${escapeHTML(file.size)} · ${formatDate(file.createdAt)}</small>
+        </div>
 
-        input.addEventListener("change", () => {
-            const file = input.files[0];
+        <button class="action-button danger"
+                data-action="delete-document"
+                data-id="${escapeHTML(file.id)}">
+          Remove
+        </button>
+      </div>
+    `;
+  }).join("");
 
-            if (!file) {
-                return;
-            }
+  return `
+    <h1 class="page-heading">My <span class="gradient-text">Documents</span></h1>
+    <p class="page-subtitle">
+      Select your study files and keep track of them here.
+    </p>
 
-            const extension = file.name
-                .split(".")
-                .pop()
-                .toLowerCase();
+    <div class="card">
+      <form id="documentForm" class="form-stack">
 
-            const result = $("#documentResult");
+        <label class="form-label">
+          Choose a document
+          <input class="field" type="file" id="documentInput"
+                 accept=".pdf,.txt,.docx,.pptx">
+        </label>
 
-            result.hidden = false;
+        <p class="small-text muted">
+          Supported formats: PDF, TXT, DOCX and PPTX. Maximum 10 MB per file.
+        </p>
 
-            if (!ALLOWED_EXTENSIONS.includes(extension)) {
-                result.textContent =
-                    "Unsupported file type. Choose PDF, TXT, DOCX or PPTX.";
+        <button class="action-button primary" type="submit">
+          ＋ Add Document
+        </button>
 
-                return;
-            }
+      </form>
+    </div>
 
-            if (file.size > MAX_FILE_SIZE) {
-                result.textContent =
-                    "This file is too large. Maximum size is 10 MB.";
+    <h2 class="section-title">Your documents (${state.documents.length})</h2>
 
-                return;
-            }
+    <div class="list-stack">
+      ${list || '<div class="empty-state">📂<br>No documents added yet.</div>'}
+    </div>
 
-            result.textContent =
-                "Selected: " + file.name +
-                " (" + formatBytes(file.size) + "). " +
-                "The file is selected locally. Server-side text " +
-                "extraction is not implemented yet.";
+    <p class="small-text muted">
+      This demo saves document names only. Actual document reading and AI analysis require a backend.
+    </p>
+  `;
+}
 
-            saveActivity("Selected a study document");
+function saveDocument(event) {
+  event.preventDefault();
 
-            showToast("Document selected successfully. 💙");
-        });
-    }
+  const input = $("#documentInput");
+  const file = input?.files?.[0];
 
+  if (!file) {
+    showToast("Choose a file first.");
+    return;
+  }
 
-    if (page === "notes") {
-        $("#createNotes").addEventListener("click", () => {
-            const topic = $("#noteTopic").value.trim();
-            const format = $("#noteFormat").value;
+  if (file.size > 10 * 1024 * 1024) {
+    showToast("File must be smaller than 10 MB.");
+    return;
+  }
 
-            const result = $("#notesResult");
+  const allowed = ["pdf", "txt", "docx", "pptx"];
+  const extension = file.name.split(".").pop().toLowerCase();
 
-            result.hidden = false;
+  if (!allowed.includes(extension)) {
+    showToast("That file format is not supported.");
+    return;
+  }
 
-            if (!topic) {
-                result.textContent = "Please enter a study topic.";
-                return;
-            }
+  state.documents.unshift({
+    id: makeId(),
+    name: file.name,
+    size: formatBytes(file.size),
+    createdAt: new Date().toISOString()
+  });
 
-            result.textContent =
-                "Notes request prepared!\n\n" +
-                "Topic: " + topic + "\n" +
-                "Format: " + format + "\n\n" +
-                "AI generation will be connected in Stage 2.";
+  saveData();
+  renderPage();
 
-            state.savedItems.push({
-                type: "Notes request",
-                title: topic + " — " + format,
-                time: new Date().toLocaleString()
-            });
+  showToast("Document added to your list. 📚");
+}
 
-            saveActivity("Prepared a notes request");
+function deleteDocument(id) {
+  state.documents = state.documents.filter(function (file) {
+    return file.id !== id;
+  });
 
-            setAssistantState(
-                "success",
-                "Great choice! ✨",
-                "Let's make your notes easy to revise."
-            );
-
-            showToast("Notes request prepared.");
-        });
-    }
-
-
-    if (page === "youtube") {
-        $("#prepareVideo").addEventListener("click", () => {
-            const url = $("#youtubeUrl").value.trim();
-            const result = $("#videoResult");
-
-            result.hidden = false;
-
-            let parsedUrl;
-
-            try {
-                parsedUrl = new URL(url);
-            } catch {
-                result.textContent = "Please enter a valid YouTube URL.";
-                return;
-            }
-
-            const hostname = parsedUrl.hostname
-                .toLowerCase()
-                .replace(/^www\./, "")
-                .replace(/^m\./, "");
-
-            const validHost = [
-                "youtube.com",
-                "youtu.be",
-                "music.youtube.com"
-            ].includes(hostname);
-
-            if (!validHost) {
-                result.textContent =
-                    "Please enter a YouTube video URL.";
-                return;
-            }
-
-            let videoId = "";
-
-            if (hostname === "youtu.be") {
-                videoId = parsedUrl.pathname
-                    .split("/")
-                    .filter(Boolean)[0] || "";
-            } else if (parsedUrl.pathname === "/watch") {
-                videoId = parsedUrl.searchParams.get("v") || "";
-            } else {
-                const parts = parsedUrl.pathname.split("/")
-                    .filter(Boolean);
-
-                if (
-                    ["embed", "shorts", "live"].includes(parts[0])
-                ) {
-                    videoId = parts[1] || "";
-                }
-            }
-
-            if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-                result.textContent =
-                    "We couldn't identify a valid video ID in that URL.";
-                return;
-            }
-
-            result.textContent =
-                "Video link accepted!\n\n" +
-                "Video ID: " + videoId + "\n\n" +
-                "Next step: retrieve an accessible transcript " +
-                "and send it for summarization.";
-
-            state.savedItems.push({
-                type: "YouTube request",
-                title: url,
-                time: new Date().toLocaleString()
-            });
-
-            saveActivity("Prepared a YouTube study request");
-
-            setAssistantState(
-                "success",
-                "Video found! 🎬",
-                "Let's prepare your lecture for studying."
-            );
-
-            showToast("YouTube link accepted.");
-        });
-    }
-
-
-    if (page === "quiz") {
-        $("#prepareQuiz").addEventListener("click", () => {
-            const topic = $("#quizTopic").value.trim();
-            const count = $("#quizCount").value;
-
-            const result = $("#quizResult");
-
-            result.hidden = false;
-
-            if (!topic) {
-                result.textContent = "Please enter a quiz topic.";
-                return;
-            }
-
-            result.textContent =
-                "Quiz request prepared!\n\n" +
-                "Topic: " + topic + "\n" +
-                "Questions requested: " + count + "\n\n" +
-                "Actual quiz generation will be implemented " +
-                "after connecting the AI backend.";
-
-            state.savedItems.push({
-                type: "Quiz request",
-                title: topic + " — " + count + " questions",
-                time: new Date().toLocaleString()
-            });
-
-            saveActivity("Prepared a quiz request");
-
-            setAssistantState(
-                "success",
-                "You got this! 💙",
-                "Every question is a chance to learn."
-            );
-
-            showToast("Quiz request prepared.");
-        });
-    }
+  saveData();
+  renderPage();
+  showToast("Document removed.");
 }
 
 
-/* ==========================================
-   EVENT LISTENERS
-========================================== */
+/* ---------- YOUTUBE STUDY ---------- */
 
-sendButton.addEventListener("click", () => {
-    sendMessage();
-});
+function isValidYouTubeURL(value) {
+  try {
+    const url = new URL(value);
+
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+
+    const validHost = [
+      "youtube.com",
+      "m.youtube.com",
+      "music.youtube.com",
+      "youtu.be"
+    ].includes(host);
+
+    if (!validHost) return false;
+
+    if (host === "youtu.be") {
+      return url.pathname.length > 1;
+    }
+
+    return (
+      url.pathname === "/watch" && Boolean(url.searchParams.get("v"))
+    ) || /^\/(embed|shorts|live)\/[^/]+/.test(url.pathname);
+
+  } catch (error) {
+    return false;
+  }
+}
+
+function renderYoutubePage() {
+  const list = state.videos.map(function (video) {
+    return `
+      <div class="list-item">
+        <div class="list-icon">▶️</div>
+
+        <div class="list-item-content">
+          <strong>${escapeHTML(video.title)}</strong>
+          <small>${escapeHTML(video.url)}</small>
+          <small>Added ${formatDate(video.createdAt)}</small>
+        </div>
+
+        <button class="action-button danger"
+                data-action="delete-video"
+                data-id="${escapeHTML(video.id)}">
+          Remove
+        </button>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <h1 class="page-heading">YouTube <span class="gradient-text">Study</span></h1>
+    <p class="page-subtitle">
+      Organise lecture links for your study sessions.
+    </p>
+
+    <div class="card">
+      <form id="youtubeForm" class="form-stack">
+
+        <label class="form-label">
+          Lecture title
+          <input class="field" id="videoTitle"
+                 maxlength="150"
+                 placeholder="Example: Java Programming Lecture 1"
+                 required>
+        </label>
+
+        <label class="form-label">
+          YouTube link
+          <input class="field" id="videoURL"
+                 type="url"
+                 placeholder="https://www.youtube.com/watch?v=..."
+                 required>
+        </label>
+
+        <button class="action-button primary" type="submit">
+          ＋ Save Lecture
+        </button>
+
+      </form>
+    </div>
+
+    <h2 class="section-title">Saved lectures (${state.videos.length})</h2>
+
+    <div class="list-stack">
+      ${list || '<div class="empty-state">🎬<br>No lectures saved yet.</div>'}
+    </div>
+
+    <p class="small-text muted">
+      Transcript extraction and automatic notes are not enabled in this frontend demo.
+    </p>
+  `;
+}
+
+function saveVideo(event) {
+  event.preventDefault();
+
+  const title = $("#videoTitle")?.value.trim();
+  const url = $("#videoURL")?.value.trim();
+
+  if (!title || !url) {
+    showToast("Enter a title and YouTube link.");
+    return;
+  }
+
+  if (!isValidYouTubeURL(url)) {
+    showToast("Please enter a valid YouTube video link.");
+    return;
+  }
+
+  state.videos.unshift({
+    id: makeId(),
+    title: title,
+    url: url,
+    createdAt: new Date().toISOString()
+  });
+
+  saveData();
+  renderPage();
+
+  showToast("Lecture saved! 🎬");
+}
+
+function deleteVideo(id) {
+  state.videos = state.videos.filter(function (video) {
+    return video.id !== id;
+  });
+
+  saveData();
+  renderPage();
+  showToast("Lecture removed.");
+}
 
 
-chatInput.addEventListener("input", () => {
-    chatInput.style.height = "auto";
+/* ---------- GROUP STUDY ---------- */
 
-    chatInput.style.height =
-        Math.min(chatInput.scrollHeight, 140) + "px";
+function renderGroupsPage() {
+  const groups = state.groups.map(function (group) {
+    return `
+      <div class="list-item">
 
-    characterCount.textContent =
-        chatInput.value.length + " / 5000";
+        <div class="list-icon">👥</div>
 
-    if (chatInput.value.trim()) {
-        assistantTyping();
+        <div class="list-item-content">
+          <strong>${escapeHTML(group.name)}</strong>
+          <small>${escapeHTML(group.subject)} · ${group.members.length} member(s)</small>
+          <small>Invite code: ${escapeHTML(group.code)}</small>
+        </div>
+
+        <div class="button-row">
+          <button class="action-button"
+                  data-action="copy-invite"
+                  data-id="${escapeHTML(group.id)}">
+            Invite
+          </button>
+
+          <button class="action-button"
+                  data-action="open-group"
+                  data-id="${escapeHTML(group.id)}">
+            Open
+          </button>
+        </div>
+
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <h1 class="page-heading">Group <span class="gradient-text">Study</span></h1>
+
+    <p class="page-subtitle">
+      Create a study group, invite friends, and organise your learning together.
+    </p>
+
+    <div class="card">
+      <h3>✨ Create a new study group</h3>
+
+      <p class="small-text">
+        Start a group for your classmates, a subject, or an exam.
+      </p>
+
+      <form id="groupForm" class="form-stack">
+
+        <label class="form-label">
+          Group name
+          <input class="field" id="groupName"
+                 maxlength="80"
+                 placeholder="Example: AI & Data Science Squad"
+                 required>
+        </label>
+
+        <label class="form-label">
+          Subject
+          <input class="field" id="groupSubject"
+                 maxlength="100"
+                 placeholder="Example: Machine Learning"
+                 required>
+        </label>
+
+        <label class="form-label">
+          Study goal
+          <textarea class="textarea-field" id="groupGoal"
+                    maxlength="1000"
+                    placeholder="What will your group study?"></textarea>
+        </label>
+
+        <button class="action-button primary" type="submit">
+          ＋ Create Study Group
+        </button>
+
+      </form>
+    </div>
+
+    <h2 class="section-title">Your groups (${state.groups.length})</h2>
+
+    <div class="list-stack">
+      ${groups || '<div class="empty-state">👥<br>You have no study groups yet.<br>Create your first group above!</div>'}
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h3>🔗 Join with an invite code</h3>
+
+      <p class="small-text">
+        Enter a code from a group invitation. In this frontend demo,
+        codes work only for groups saved in this browser.
+      </p>
+
+      <form id="joinGroupForm" class="form-stack">
+        <label class="form-label">
+          Invite code
+          <input class="field" id="inviteCode"
+                 maxlength="30"
+                 placeholder="Enter invite code"
+                 required>
+        </label>
+
+        <button class="action-button" type="submit">
+          Join Group
+        </button>
+      </form>
+    </div>
+  `;
+}
+
+function createGroup(event) {
+  event.preventDefault();
+
+  const name = $("#groupName")?.value.trim();
+  const subject = $("#groupSubject")?.value.trim();
+  const goal = $("#groupGoal")?.value.trim();
+
+  if (!name || !subject) {
+    showToast("Enter a group name and subject.");
+    return;
+  }
+
+  const code = "LNX-" +
+    Math.random().toString(36).slice(2, 6).toUpperCase() +
+    "-" +
+    Math.random().toString(36).slice(2, 5).toUpperCase();
+
+  const group = {
+    id: makeId(),
+    name: name,
+    subject: subject,
+    goal: goal,
+    code: code,
+    members: ["You"],
+    messages: [],
+    createdAt: new Date().toISOString()
+  };
+
+  state.groups.unshift(group);
+
+  saveData();
+  renderPage();
+
+  setBuddyMessage("Your study group is ready! Invite your friends. 💙");
+  showToast("Study group created successfully!");
+}
+
+function createInviteMessage(group) {
+  return [
+    "💙 You're invited to study with me on Lunexa AI!",
+    "",
+    "📚 Group: " + group.name,
+    "📖 Subject: " + group.subject,
+    group.goal ? "🎯 Goal: " + group.goal : "",
+    "",
+    "🔑 Invite code: " + group.code,
+    "",
+    "Open Lunexa AI and use Group Study to join.",
+    "",
+    "Note: This is a demo invite. Online joining requires a shared backend."
+  ].filter(Boolean).join("\n");
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
     } else {
-        resetAssistant();
+      const area = document.createElement("textarea");
+
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+
+      document.body.appendChild(area);
+      area.select();
+
+      const success = document.execCommand("copy");
+
+      area.remove();
+
+      if (!success) throw new Error("Copy failed");
     }
-});
 
+    showToast("Invitation copied! Share it with your friends. 💙");
 
-chatInput.addEventListener("keydown", (event) => {
-    if (
-        event.key === "Enter" &&
-        !event.shiftKey &&
-        !event.isComposing
-    ) {
-        event.preventDefault();
-        sendMessage();
-    }
-});
-
-
-attachButton.addEventListener("click", () => {
-    fileInput.click();
-});
-
-
-fileInput.addEventListener("change", handleFileSelection);
-
-
-$("#newChat").addEventListener("click", newChat);
-
-
-menuButton.addEventListener("click", openMobileSidebar);
-
-
-closeSidebar.addEventListener("click", closeMobileSidebar);
-
-
-overlay.addEventListener("click", closeMobileSidebar);
-
-
-$("#themeButton").addEventListener("click", () => {
-    document.body.classList.toggle("light-theme");
-
-    const isLight = document.body.classList.contains("light-theme");
-
-    $("#themeButton").textContent = isLight ? "☾" : "☼";
-
-    showToast(
-        isLight
-            ? "Light theme enabled."
-            : "Dark theme enabled. 🌙"
-    );
-});
-
-
-$$(".nav-item").forEach((item) => {
-    item.addEventListener("click", () => {
-        navigateTo(item.dataset.page);
-    });
-});
-
-
-$$(".quick-card").forEach((card) => {
-    card.addEventListener("click", () => {
-        navigateTo("chat");
-
-        const prompt = card.dataset.prompt;
-
-        chatInput.value = prompt;
-
-        chatInput.dispatchEvent(
-            new Event("input", { bubbles: true })
-        );
-
-        chatInput.focus();
-
-        window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: "smooth"
-        });
-    });
-});
-
-
-/* Keyboard escape closes the mobile menu */
-
-document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-        closeMobileSidebar();
-    }
-});
-
-
-/* ==========================================
-   INITIALIZATION
-========================================== */
-
-function initializeApp() {
-    navigateTo("chat");
-
-    resetAssistant();
-
-    saveActivity("Opened Lunexa AI");
-
-    console.log("Lunexa AI frontend initialized successfully.");
+  } catch (error) {
+    window.prompt("Copy this invitation:", text);
+  }
 }
 
-initializeApp();
+function inviteGroup(id) {
+  const group = state.groups.find(function (item) {
+    return item.id === id;
+  });
+
+  if (!group) {
+    showToast("Group not found.");
+    return;
+  }
+
+  const message = createInviteMessage(group);
+
+  if (navigator.share) {
+    navigator.share({
+      title: "Lunexa AI Study Group",
+      text: message
+    }).then(function () {
+      showToast("Invitation shared!");
+    }).catch(function (error) {
+      if (error.name !== "AbortError") {
+        copyText(message);
+      }
+    });
+
+  } else {
+    copyText(message);
+  }
+}
+
+function joinGroup(event) {
+  event.preventDefault();
+
+  const code = $("#inviteCode")?.value.trim().toUpperCase();
+
+  if (!code) {
+    showToast("Enter an invite code.");
+    return;
+  }
+
+  const group = state.groups.find(function (item) {
+    return item.code.toUpperCase() === code;
+  });
+
+  if (!group) {
+    showToast(
+      "Group not found in this browser. Online group joining needs a backend."
+    );
+    return;
+  }
+
+  if (!group.members.includes("You")) {
+    group.members.push("You");
+  }
+
+  saveData();
+
+  openGroup(group.id);
+}
+
+function openGroup(id) {
+  const group = state.groups.find(function (item) {
+    return item.id === id;
+  });
+
+  if (!group) {
+    showToast("Group not found.");
+    return;
+  }
+
+  currentPage = "groups";
+
+  pageHeading.textContent = group.name;
+
+  document.querySelectorAll(".nav-item").forEach(function (item) {
+    item.classList.toggle(
+      "active",
+      item.dataset.page === "groups"
+    );
+  });
+
+  if (sidebar) sidebar.classList.remove("open");
+
+  const messagesHTML = group.messages.map(function (message) {
+    return `
+      <div class="list-item">
+        <div class="list-icon">💬</div>
+
+        <div class="list-item-content">
+          <strong>${escapeHTML(message.author)}</strong>
+          <small>${escapeHTML(message.text)}</small>
+          <small>${formatDate(message.createdAt)}</small>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  pageContainer.innerHTML = `
+    <button class="action-button" data-page="groups">
+      ← All Groups
+    </button>
+
+    <h1 class="page-heading" style="margin-top:20px">
+      ${escapeHTML(group.name)}
+    </h1>
+
+    <p class="page-subtitle">
+      ${escapeHTML(group.subject)} · ${group.members.length} member(s)
+    </p>
+
+    <div class="card">
+      <h3>🎯 Study goal</h3>
+      <p>${escapeHTML(group.goal || "Learn together and support each other.")}</p>
+
+      <div class="button-row">
+        <button class="action-button primary"
+                data-action="copy-invite"
+                data-id="${escapeHTML(group.id)}">
+          🔗 Invite Friends
+        </button>
+
+        <button class="action-button"
+                data-action="delete-group"
+                data-id="${escapeHTML(group.id)}">
+          Delete Group
+        </button>
+      </div>
+    </div>
+
+    <h2 class="section-title">Group discussion</h2>
+
+    <div class="list-stack" style="margin-bottom:20px">
+      ${messagesHTML || '<div class="empty-state">💬<br>No messages yet.<br>Start the discussion below.</div>'}
+    </div>
+
+    <div class="card">
+      <form id="groupMessageForm" class="form-stack">
+
+        <label class="form-label">
+          Write a message
+          <textarea class="textarea-field" id="groupMessage"
+                    maxlength="2000"
+                    placeholder="Share a question or study tip..."
+                    required></textarea>
+        </label>
+
+        <button class="action-button primary" type="submit">
+          Send Message
+        </button>
+
+      </form>
+
+      <p class="small-text muted">
+        Demo messages are saved in this browser only.
+        Other users cannot see them until online accounts and a backend are added.
+      </p>
+    </div>
+  `;
+
+  setBuddyMessage("Let's make this group study session productive! 💙");
+}
+
+function sendGroupMessage(event) {
+  event.preventDefault();
+
+  const group = state.groups.find(function (item) {
+    return pageHeading.textContent === item.name;
+  });
+
+  if (!group) {
+    showToast("Open a group before sending a message.");
+    return;
+  }
+
+  const input = $("#groupMessage");
+  const text = input?.value.trim();
+
+  if (!text) {
+    showToast("Write a message first.");
+    return;
+  }
+
+  group.messages.push({
+    id: makeId(),
+    author: "You",
+    text: text,
+    createdAt: new Date().toISOString()
+  });
+
+  saveData();
+  openGroup(group.id);
+
+  showToast("Message added to the demo discussion.");
+}
+
+function deleteGroup(id) {
+  const group = state.groups.find(function (item) {
+    return item.id === id;
+  });
+
+  if (!group) return;
+
+  if (!window.confirm("Delete this study group?")) return;
+
+  state.groups = state.groups.filter(function (item) {
+    return item.id !== id;
+  });
+
+  saveData();
+  navigateTo("groups");
+  showToast("Study group deleted.");
+}
+
+
+/* ---------- FRIENDS ---------- */
+
+function renderFriendsPage() {
+  const friendsHTML = state.friends.map(function (friend) {
+    return `
+      <div class="list-item">
+
+        <div class="profile-avatar">
+          ${escapeHTML(friend.name.charAt(0).toUpperCase())}
+        </div>
+
+        <div class="list-item-content">
+          <strong>${escapeHTML(friend.name)}</strong>
+          <small>${escapeHTML(friend.email || "Lunexa study friend")}</small>
+        </div>
+
+        <button class="action-button danger"
+                data-action="remove-friend"
+                data-id="${escapeHTML(friend.id)}">
+          Remove
+        </button>
+
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <h1 class="page-heading">Study <span class="gradient-text">Friends</span></h1>
+
+    <p class="page-subtitle">
+      Create your study circle and keep your learning organised.
+    </p>
+
+    <div class="card">
+      <h3>♡ Add a friend</h3>
+
+      <p class="small-text">
+        Save a friend's name and email in your local study list.
+      </p>
+
+      <form id="friendForm" class="form-stack">
+
+        <label class="form-label">
+          Friend's name
+          <input class="field" id="friendName"
+                 maxlength="80"
+                 placeholder="Enter their name"
+                 required>
+        </label>
+
+        <label class="form-label">
+          Email (optional)
+          <input class="field" id="friendEmail"
+                 type="email"
+                 maxlength="150"
+                 placeholder="friend@example.com">
+        </label>
+
+        <button class="action-button primary" type="submit">
+          ＋ Add Friend
+        </button>
+
+      </form>
+    </div>
+
+    <h2 class="section-title">My friends (${state.friends.length})</h2>
+
+    <div class="list-stack">
+      ${friendsHTML || '<div class="empty-state">♡<br>Your study circle starts here.<br>Add a friend above!</div>'}
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h3>🔗 Invite a friend to Lunexa</h3>
+
+      <p class="small-text">
+        Share an invitation so your friend can learn about Lunexa AI.
+      </p>
+
+      <button class="action-button primary"
+              data-action="share-lunexa">
+        Share Lunexa Invite
+      </button>
+    </div>
+  `;
+}
+
+function addFriend(event) {
+  event.preventDefault();
+
+  const name = $("#friendName")?.value.trim();
+  const email = $("#friendEmail")?.value.trim();
+
+  if (!name) {
+    showToast("Enter your friend's name.");
+    return;
+  }
+
+  if (email && state.friends.some(function (friend) {
+    return friend.email.toLowerCase() === email.toLowerCase();
+  })) {
+    showToast("This friend is already in your list.");
+    return;
+  }
+
+  state.friends.unshift({
+    id: makeId(),
+    name: name,
+    email: email,
+    createdAt: new Date().toISOString()
+  });
+
+  saveData();
+  renderPage();
+
+  showToast("Friend added to your study list! 💙");
+}
+
+function removeFriend(id) {
+  state.friends = state.friends.filter(function (friend) {
+    return friend.id !== id;
+  });
+
+  saveData();
+  renderPage();
+  showToast("Friend removed.");
+}
+
+function shareLunexa() {
+  const text = [
+    "💙 Let's study together!",
+    "",
+    "I'm organising my study sessions with Lunexa AI.",
+    "Create a study group, save notes, and practise quizzes together!",
+    "",
+    "Join me on Lunexa AI."
+  ].join("\n");
+
+  if (navigator.share) {
+    navigator.share({
+      title: "Lunexa AI",
+      text: text,
+      url: window.location.href
+    }).catch(function (error) {
+      if (error.name !== "AbortError") {
+        copyText(text + "\n" + window.location.href);
+      }
+    });
+  } else {
+    copyText(text + "\n" + window.location.href);
+  }
+}
+
+
+/* ---------- QUIZ ---------- */
+
+const quizQuestions = [
+  {
+    question: "What does AI stand for?",
+    options: [
+      "Automated Internet",
+      "Artificial Intelligence",
+      "Advanced Interface",
+      "Applied Information"
+    ],
+    answer: 1,
+    explanation: "AI stands for Artificial Intelligence."
+  },
+  {
+    question: "Which language is commonly used for data science?",
+    options: [
+      "Python",
+      "HTML only",
+      "CSS only",
+      "XML only"
+    ],
+    answer: 0,
+    explanation: "Python is widely used for data analysis and machine learning."
+  },
+  {
+    question: "What is the main purpose of HTML?",
+    options: [
+      "Store passwords",
+      "Train neural networks",
+      "Structure web pages",
+      "Manage operating systems"
+    ],
+    answer: 2,
+    explanation: "HTML defines the structure and content of a web page."
+  }
+];
+
+function renderQuizPage() {
+  const question = quizQuestions[activeQuiz];
+
+  if (!question) {
+    activeQuiz = 0;
+    return renderQuizPage();
+  }
+
+  const optionsHTML = question.options.map(function (option, index) {
+    return `
+      <button class="quiz-option"
+              data-action="answer-quiz"
+              data-answer="${index}">
+        ${String.fromCharCode(65 + index)}. ${escapeHTML(option)}
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <h1 class="page-heading">Quiz & <span class="gradient-text">Flashcards</span></h1>
+
+    <p class="page-subtitle">
+      Practise with this sample quiz. More subjects can be added later.
+    </p>
+
+    <div class="card">
+      <p class="eyebrow">QUESTION ${activeQuiz + 1} OF ${quizQuestions.length}</p>
+
+      <h3>${escapeHTML(question.question)}</h3>
+
+      <div id="quizOptions">
+        ${optionsHTML}
+      </div>
+
+      <div id="quizFeedback"></div>
+
+      <button class="action-button primary"
+              id="nextQuestion"
+              data-action="next-quiz"
+              style="display:none;margin-top:15px">
+        Next Question →
+      </button>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h3>🃏 Flashcards</h3>
+
+      <p>Use this card to remember an important concept.</p>
+
+      <button class="action-button"
+              data-action="flip-card"
+              data-state="question">
+        Show flashcard answer
+      </button>
+
+      <p id="flashcardContent" class="feedback">
+        Question: What is AI?
+      </p>
+    </div>
+  `;
+}
+
+function answerQuiz(answer) {
+  if (quizAnswered) return;
+
+  const question = quizQuestions[activeQuiz];
+  const feedback = $("#quizFeedback");
+
+  if (!question || !feedback) return;
+
+  quizAnswered = true;
+
+  const correct = Number(answer) === question.answer;
+
+  const buttons = document.querySelectorAll(".quiz-option");
+
+  buttons.forEach(function (button, index) {
+    button.disabled = true;
+
+    if (index === question.answer) {
+      button.classList.add("correct");
+    } else if (index === Number(answer)) {
+      button.classList.add("incorrect");
+    }
+  });
+
+  feedback.innerHTML = `
+    <div class="feedback">
+      ${correct ? "✅ Correct!" : "💡 Not quite!"}
+      ${escapeHTML(question.explanation)}
+    </div>
+  `;
+
+  const nextButton = $("#nextQuestion");
+
+  if (nextButton) {
+    nextButton.style.display = "inline-flex";
+    nextButton.textContent =
+      activeQuiz === quizQuestions.length - 1
+        ? "Restart Quiz ↻"
+        : "Next Question →";
+  }
+}
+
+function nextQuiz() {
+  if (!quizAnswered) {
+    showToast("Answer the question first.");
+    return;
+  }
+
+  if (activeQuiz === quizQuestions.length - 1) {
+    activeQuiz = 0;
+  } else {
+    activeQuiz++;
+  }
+
+  quizAnswered = false;
+  renderPage();
+}
+
+function flipFlashcard(button) {
+  const content = $("#flashcardContent");
+
+  if (!content) return;
+
+  const showingQuestion = button.dataset.state === "question";
+
+  if (showingQuestion) {
+    content.textContent =
+      "Answer: AI stands for Artificial Intelligence. It enables computers to perform tasks that usually require human intelligence.";
+
+    button.dataset.state = "answer";
+    button.textContent = "Show question ↻";
+
+  } else {
+    content.textContent = "Question: What is AI?";
+
+    button.dataset.state = "question";
+    button.textContent = "Show flashcard answer";
+  }
+}
+
+
+/* ---------- CHAT HISTORY ---------- */
+
+function renderHistoryPage() {
+  const historyHTML = state.chats.map(function (chat) {
+    return `
+      <div class="list-item">
+
+        <div class="list-icon">◷</div>
+
+        <div class="list-item-content">
+          <strong>${escapeHTML(chat.title)}</strong>
+          <small>${formatDate(chat.createdAt)}</small>
+          <small>${chat.messages.length} messages</small>
+        </div>
+
+        <button class="action-button"
+                data-action="restore-chat"
+                data-id="${escapeHTML(chat.id)}">
+          Open
+        </button>
+
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <h1 class="page-heading">Chat <span class="gradient-text">History</span></h1>
+
+    <p class="page-subtitle">
+      Revisit your saved study conversations.
+    </p>
+
+    <div class="list-stack">
+      ${historyHTML || '<div class="empty-state">◷<br>No previous chats yet.<br>Start a chat and create a new session to save it here.</div>'}
+    </div>
+
+    <button class="action-button primary"
+            data-action="new-chat"
+            style="margin-top:20px">
+      ＋ Start New Chat
+    </button>
+  `;
+}
+
+function restoreChat(id) {
+  const chat = state.chats.find(function (item) {
+    return item.id === id;
+  });
+
+  if (!chat) {
+    showToast("Chat not found.");
+    return;
+  }
+
+  state.messages = chat.messages.slice();
+
+  saveData();
+  navigateTo("chat");
+
+  showToast("Previous chat restored.");
+}
+
+
+/* ---------- EVENT DELEGATION ---------- */
+
+/*
+  Important:
+  These listeners are attached to stable elements.
+  Replacing pageContainer.innerHTML will not remove them.
+*/
+
+document.addEventListener("click", function (event) {
+  const pageButton = event.target.closest("[data-page]");
+
+  if (pageButton) {
+    event.preventDefault();
+    navigateTo(pageButton.dataset.page);
+    return;
+  }
+
+  const actionButton = event.target.closest("[data-action]");
+
+  if (!actionButton) return;
+
+  const action = actionButton.dataset.action;
+  const id = actionButton.dataset.id;
+
+  switch (action) {
+
+    case "new-chat":
+      startNewChat();
+      break;
+
+    case "toggle-theme":
+      document.body.classList.toggle("light-theme");
+
+      state.theme = document.body.classList.contains("light-theme")
+        ? "light"
+        : "dark";
+
+      saveData();
+      break;
+
+    case "prompt":
+      sendChatMessage(actionButton.dataset.prompt || "");
+      break;
+
+    case "delete-note":
+      deleteNote(id);
+      break;
+
+    case "delete-document":
+      deleteDocument(id);
+      break;
+
+    case "delete-video":
+      deleteVideo(id);
+      break;
+
+    case "copy-invite":
+      inviteGroup(id);
+      break;
+
+    case "open-group":
+      openGroup(id);
+      break;
+
+    case "delete-group":
+      deleteGroup(id);
+      break;
+
+    case "share-lunexa":
+      shareLunexa();
+      break;
+
+    case "remove-friend":
+      removeFriend(id);
+      break;
+
+    case "answer-quiz":
+      answerQuiz(actionButton.dataset.answer);
+      break;
+
+    case "next-quiz":
+      nextQuiz();
+      break;
+
+    case "flip-card":
+      flipFlashcard(actionButton);
+      break;
+
+    case "restore-chat":
+      restoreChat(id);
+      break;
+  }
+});
+
+
+/* ---------- FORM SUBMISSION ---------- */
+
+document.addEventListener("submit", function (event) {
+  const form = event.target;
+
+  switch (form.id) {
+
+    case "chatForm":
+      event.preventDefault();
+
+      sendChatMessage($("#chatInput")?.value || "");
+      break;
+
+    case "noteForm":
+      saveNote(event);
+      break;
+
+    case "documentForm":
+      saveDocument(event);
+      break;
+
+    case "youtubeForm":
+      saveVideo(event);
+      break;
+
+    case "groupForm":
+      createGroup(event);
+      break;
+
+    case "joinGroupForm":
+      joinGroup(event);
+      break;
+
+    case "friendForm":
+      addFriend(event);
+      break;
+
+    case "groupMessageForm":
+      sendGroupMessage(event);
+      break;
+  }
+});
+
+
+/* ---------- MOBILE MENU ---------- */
+
+const menuToggle = $("#menuToggle");
+
+if (menuToggle) {
+  menuToggle.addEventListener("click", function () {
+    sidebar?.classList.toggle("open");
+  });
+}
+
+document.addEventListener("click", function (event) {
+  if (!sidebar || !sidebar.classList.contains("open")) return;
+
+  if (
+    !sidebar.contains(event.target) &&
+    !event.target.closest("#menuToggle")
+  ) {
+    sidebar.classList.remove("open");
+  }
+});
+
+
+/* ---------- KEYBOARD SHORTCUT ---------- */
+
+document.addEventListener("keydown", function (event) {
+  if (
+    currentPage === "chat" &&
+    event.key === "Enter" &&
+    !event.shiftKey &&
+    event.target?.id === "chatInput"
+  ) {
+    event.preventDefault();
+
+    const form = $("#chatForm");
+
+    if (form && typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+    }
+  }
+});
+
+
+/* ---------- INITIALISE ---------- */
+
+function initialiseApp() {
+  if (state.theme === "light") {
+    document.body.classList.add("light-theme");
+  }
+
+  navigateTo("chat");
+
+  console.log("Lunexa AI initialised successfully.");
+}
+
+initialiseApp();
