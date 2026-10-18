@@ -1,8 +1,7 @@
 "use strict";
 
 /* =========================================
-LUNEXA AI - APPLICATION
-Gemini AI + Local Storage
+LUNEXA AI - COMPLETE FRONTEND
 ========================================= */
 
 const $ = (selector, root = document) =>
@@ -17,11 +16,10 @@ const toastElement = $("#toast");
 
 let toastTimer = null;
 let currentPage = "chat";
+let chatRequestPending = false;
 let activeQuiz = 0;
 let quizAnswered = false;
-let chatRequestPending = false;
-
-/* ---------- SAFE STORAGE ---------- */
+let openedGroupId = null;
 
 function loadData() {
 const defaults = {
@@ -36,17 +34,15 @@ theme: "dark"
 };
 
 try {
-const saved = localStorage.getItem(STORAGE_KEY);
-
-if (!saved) return defaults;
+const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
 
 return {
   ...defaults,
-  ...JSON.parse(saved)
+  ...saved
 };
 
 } catch (error) {
-console.error("Could not load saved data:", error);
+console.error("Lunexa storage error:", error);
 return defaults;
 }
 }
@@ -56,38 +52,27 @@ const state = loadData();
 function saveData() {
 try {
 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-return true;
 } catch (error) {
-console.error("Could not save data:", error);
-showToast("Storage is full. Try removing some saved items.");
-return false;
+console.error("Lunexa could not save data:", error);
+showToast("Storage is full. Remove some saved items.");
 }
 }
 
-/* ---------- HELPERS ---------- */
+function makeId() {
+return window.crypto?.randomUUID?.() ||
+Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
 
 function escapeHTML(value) {
 return String(value ?? "").replace(/[&<>"']/g, function (char) {
-const replacements = {
+return {
 "&": "&",
 "<": "<",
 ">": ">",
 '"': """,
 "'": "'"
-};
-
-return replacements[char];
-
+}[char];
 });
-}
-
-function makeId() {
-if (window.crypto && typeof window.crypto.randomUUID === "function") {
-return window.crypto.randomUUID();
-}
-
-return Date.now().toString(36) +
-Math.random().toString(36).slice(2, 9);
 }
 
 function showToast(message) {
@@ -113,42 +98,19 @@ year: "numeric"
 
 function formatBytes(bytes) {
 if (bytes < 1024) return bytes + " B";
-if (bytes < 1024 * 1024) {
-return (bytes / 1024).toFixed(1) + " KB";
-}
-
-return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+return (bytes / 1048576).toFixed(1) + " MB";
 }
 
 function setBuddyMessage(message) {
 const speech = $("#buddySpeech");
-const description = $("#buddyDescription");
-
 if (speech) speech.textContent = message;
-if (description) description.textContent = message;
 }
-
-function setBuddyForPage(page) {
-const messages = {
-chat: "Hey bestie! Ask me anything. 💙",
-notes: "Let's turn your ideas into beautiful notes! 📝",
-documents: "Let's organise your study materials! 📚",
-youtube: "Ready to learn from your favourite lectures? 🎬",
-quiz: "Time to test what you've learned! 🎯",
-groups: "Studying together makes learning fun! 💙",
-friends: "Invite your friends and learn together! ♡",
-history: "Your previous study sessions are right here. ✨"
-};
-
-setBuddyMessage(messages[page] || messages.chat);
-}
-
-/* ---------- NAVIGATION ---------- */
 
 const pageNames = {
 chat: "AI Chat",
 notes: "Study Notes",
-documents: "Documents",
+documents: "My Documents",
 youtube: "YouTube Study",
 quiz: "Quiz & Flashcards",
 groups: "Group Study",
@@ -156,31 +118,33 @@ friends: "Friends",
 history: "Chat History"
 };
 
+const buddyMessages = {
+chat: "Ask me anything. I'm here to help! 💙",
+notes: "Let's organise your study notes! 📝",
+documents: "Your study materials, in one place. 📚",
+youtube: "Let's learn from video lectures! 🎬",
+quiz: "Ready to test your knowledge? 🎯",
+groups: "Learning together is more fun! 👥",
+friends: "Build your study circle! ♡",
+history: "Let's revisit your learning journey. ✨"
+};
+
 function navigateTo(page) {
-if (!Object.prototype.hasOwnProperty.call(pageNames, page)) {
-showToast("This page is not available.");
-return;
-}
+if (!Object.prototype.hasOwnProperty.call(pageNames, page)) return;
 
 currentPage = page;
+openedGroupId = null;
 
-if (pageHeading) {
-pageHeading.textContent = pageNames[page];
-}
+if (pageHeading) pageHeading.textContent = pageNames[page];
 
-document.querySelectorAll(".nav-item").forEach(function (item) {
-item.classList.toggle("active", item.dataset.page === page);
+document.querySelectorAll(".nav-item").forEach(function (button) {
+button.classList.toggle("active", button.dataset.page === page);
 });
 
-if (sidebar) sidebar.classList.remove("open");
+sidebar?.classList.remove("open");
 
 renderPage();
-setBuddyForPage(page);
-
-window.scrollTo({
-top: 0,
-behavior: "smooth"
-});
+setBuddyMessage(buddyMessages[page] || buddyMessages.chat);
 }
 
 function renderPage() {
@@ -197,41 +161,28 @@ friends: renderFriendsPage,
 history: renderHistoryPage
 };
 
-const renderer = renderers[currentPage] || renderChatPage;
-pageContainer.innerHTML = renderer();
+pageContainer.innerHTML = (renderers[currentPage] || renderChatPage)();
 }
 
-/* =========================================
-REAL GEMINI AI CHAT
-========================================= */
+/* ---------- CHAT ---------- */
 
 function renderChatPage() {
-const messagesHTML = state.messages.map(function (message) {
-return "<div class="message ${message.role === "user" ? "user" : "assistant"}"> <span class="message-label"> ${message.role === "user" ? "You" : "Lunexa"} </span> <div class="message-text">${escapeHTML(message.text).replace(/\n/g, "<br>")}</div> </div>";
+const messages = state.messages.map(function (message) {
+return "<div class="message ${message.role === "user" ? "user" : "assistant"}"> <span class="message-label">${message.role === "user" ? "You" : "Lunexa"}</span> <div class="message-text">${escapeHTML(message.text).replace(/\n/g, "<br>")}</div> </div>";
 }).join("");
 
 return `
 <div class="chat-layout">
+<div class="chat-welcome">
+<div class="eyebrow">YOUR PERSONAL STUDY COMPANION</div>
 
-  <div class="chat-welcome">
-    <div class="eyebrow">YOUR PERSONAL STUDY COMPANION</div>
+    <h1>Hey there! 👋<br>What are we learning <span class="gradient-text">today?</span></h1>
 
-    <h1>
-      Hey there! 👋<br>
-      What are we learning
-      <span class="gradient-text">today?</span>
-    </h1>
-
-    <p>
-      I'm Lunexa, your study buddy. Ask questions,
-      explore new concepts, and learn something amazing.
-    </p>
+    <p>I'm Lunexa, your AI study buddy. Ask questions, explore concepts, and learn something amazing.</p>
 
     <div class="feature-grid">
-
-      <button class="feature-card"
-              data-action="prompt"
-              data-prompt="Explain machine learning in simple words with an example.">
+      <button class="feature-card" data-action="prompt"
+              data-prompt="Explain artificial intelligence in simple words with an example.">
         <span class="feature-icon">🧠</span>
         <strong>Explain a topic</strong>
         <small>Make difficult concepts simple.</small>
@@ -254,40 +205,25 @@ return `
         <strong>Study with friends</strong>
         <small>Create a study group.</small>
       </button>
-
     </div>
   </div>
 
-  <div class="chat-messages" id="chatMessages">
-    ${messagesHTML}
-  </div>
+  <div class="chat-messages" id="chatMessages">${messages}</div>
 
   <form class="chat-composer" id="chatForm">
+    <textarea id="chatInput" rows="1" maxlength="4000"
+              placeholder="Ask Lunexa anything..." required
+              aria-label="Your message"
+              ${chatRequestPending ? "disabled" : ""}></textarea>
 
-    <textarea
-      id="chatInput"
-      rows="1"
-      maxlength="4000"
-      placeholder="Ask Lunexa anything..."
-      aria-label="Your message"
-      required
-      ${chatRequestPending ? "disabled" : ""}
-    ></textarea>
-
-    <button class="send-button"
-            id="sendButton"
-            type="submit"
+    <button class="send-button" id="sendButton" type="submit"
             aria-label="Send message"
             ${chatRequestPending ? "disabled" : ""}>
       ${chatRequestPending ? "…" : "➤"}
     </button>
-
   </form>
 
-  <div class="chat-footnote">
-    Your AI study buddy, powered by Gemini ✨
-  </div>
-
+  <div class="chat-footnote">Powered by Gemini AI ✨</div>
 </div>
 
 `;
@@ -301,11 +237,23 @@ text: String(text),
 createdAt: new Date().toISOString()
 });
 
-if (state.messages.length > 100) {
 state.messages = state.messages.slice(-100);
+saveData();
 }
 
+function replaceThinkingMessage(answer) {
+for (let i = state.messages.length - 1; i >= 0; i--) {
+if (
+state.messages[i].role === "assistant" &&
+state.messages[i].text === "Thinking... 💙"
+) {
+state.messages[i].text = answer;
 saveData();
+return;
+}
+}
+
+addMessage("assistant", answer);
 }
 
 async function sendChatMessage(text) {
@@ -316,10 +264,7 @@ showToast("Please type a message first.");
 return;
 }
 
-if (chatRequestPending) {
-showToast("Wait for the current answer, bestie. 💙");
-return;
-}
+if (chatRequestPending) return;
 
 chatRequestPending = true;
 
@@ -327,8 +272,7 @@ addMessage("user", message);
 addMessage("assistant", "Thinking... 💙");
 
 renderPage();
-
-setBuddyMessage("Hmm, let me think about that! 💭");
+setBuddyMessage("Thinking about your question... 💭");
 
 try {
 const response = await fetch("/api/chat", {
@@ -346,76 +290,57 @@ let data;
 try {
   data = await response.json();
 } catch (error) {
-  throw new Error(
-    "The server returned an invalid response. Check your backend deployment."
-  );
+  throw new Error("Invalid server response. Check your Vercel deployment.");
 }
 
 if (!response.ok) {
   throw new Error(
-    data.error || "The AI server returned an error (" + response.status + ")."
+    data.error || "Server error (" + response.status + ")."
   );
 }
 
-if (!data.success || typeof data.reply !== "string" || !data.reply.trim()) {
-  throw new Error(
-    data.error || "The AI server did not return an answer."
-  );
+if (
+  data.success !== true ||
+  typeof data.reply !== "string" ||
+  !data.reply.trim()
+) {
+  throw new Error(data.error || "No AI answer was returned.");
 }
 
 replaceThinkingMessage(data.reply);
-
 setBuddyMessage("Here's your answer, bestie! 💙");
 
 } catch (error) {
-console.error("Lunexa AI error:", error);
+console.error("Lunexa chat error:", error);
 
 replaceThinkingMessage(
   "Sorry bestie! 💙\n\n" +
-  (error.message || "I couldn't connect to the AI.") +
-  "\n\nPlease check your backend and try again."
+  (error.message || "Couldn't connect to the AI.") +
+  "\n\nCheck the Vercel API deployment and try again."
 );
 
-setBuddyMessage("Oops! Let's check our AI connection. 💙");
+setBuddyMessage("Let's check our AI connection. 💙");
 
 } finally {
 chatRequestPending = false;
 renderPage();
 
-const input = $("#chatInput");
-
-if (input) input.focus();
+$("#chatInput")?.focus();
 
 }
-}
-
-function replaceThinkingMessage(answer) {
-for (let index = state.messages.length - 1; index >= 0; index--) {
-const message = state.messages[index];
-
-if (
-  message.role === "assistant" &&
-  message.text === "Thinking... 💙"
-) {
-  message.text = answer;
-  saveData();
-  return;
-}
-
-}
-
-addMessage("assistant", answer);
 }
 
 function startNewChat() {
 if (state.messages.length) {
+const firstQuestion = state.messages.find(function (item) {
+return item.role === "user";
+});
+
 state.chats.unshift({
-id: makeId(),
-title: state.messages.find(function (message) {
-return message.role === "user";
-})?.text.slice(0, 55) || "Study session",
-messages: state.messages.slice(),
-createdAt: new Date().toISOString()
+  id: makeId(),
+  title: firstQuestion?.text.slice(0, 55) || "Study session",
+  messages: state.messages.slice(),
+  createdAt: new Date().toISOString()
 });
 
 state.chats = state.chats.slice(0, 30);
@@ -429,57 +354,36 @@ navigateTo("chat");
 showToast("New chat started! ✨");
 }
 
-/* ---------- STUDY NOTES ---------- */
+/* ---------- NOTES ---------- */
 
 function renderNotesPage() {
-const list = state.notes.map(function (note) {
-return `
-<div class="list-item">
-<div class="list-icon">📝</div>
-
-    <div class="list-item-content">
-      <strong>${escapeHTML(note.title)}</strong>
-      <small>${escapeHTML(note.content.slice(0, 130))}</small>
-      <small>Saved ${formatDate(note.createdAt)}</small>
-    </div>
-
-    <button class="action-button danger"
-            data-action="delete-note"
-            data-id="${escapeHTML(note.id)}">
-      Delete
-    </button>
-  </div>
-`;
-
+const items = state.notes.map(function (note) {
+return "<div class="list-item"> <div class="list-icon">📝</div> <div class="list-item-content"> <strong>${escapeHTML(note.title)}</strong> <small>${escapeHTML(note.content.slice(0, 150))}</small> <small>${formatDate(note.createdAt)}</small> </div> <button class="action-button danger" data-action="delete-note" data-id="${escapeHTML(note.id)}">Delete</button> </div>";
 }).join("");
 
 return `
 <h1 class="page-heading">Study <span class="gradient-text">Notes</span></h1>
-<p class="page-subtitle">Capture your ideas and organise your study material.</p>
+<p class="page-subtitle">Save and organise your learning.</p>
 
 <div class="card">
   <form id="noteForm" class="form-stack">
-    <label class="form-label">
-      Note title
+    <label class="form-label">Note title
       <input class="field" id="noteTitle" maxlength="120"
-             placeholder="Example: Machine Learning Basics" required>
+             placeholder="Example: Machine Learning" required>
     </label>
 
-    <label class="form-label">
-      Your notes
+    <label class="form-label">Notes
       <textarea class="textarea-field" id="noteContent"
-                maxlength="20000"
-                placeholder="Write your study notes here..." required></textarea>
+                maxlength="20000" placeholder="Write your notes..."
+                required></textarea>
     </label>
 
     <button class="action-button primary" type="submit">＋ Save Notes</button>
   </form>
 </div>
 
-<h2 class="section-title">Your saved notes (${state.notes.length})</h2>
-<div class="list-stack">
-  ${list || '<div class="empty-state">📝<br>No notes yet.<br>Create your first study note above!</div>'}
-</div>
+<h2 class="section-title">Saved notes (${state.notes.length})</h2>
+<div class="list-stack">${items || '<div class="empty-state">📝<br>No saved notes yet.</div>'}</div>
 
 `;
 }
@@ -491,7 +395,7 @@ const title = $("#noteTitle")?.value.trim();
 const content = $("#noteContent")?.value.trim();
 
 if (!title || !content) {
-showToast("Please enter a title and notes.");
+showToast("Enter a title and notes.");
 return;
 }
 
@@ -504,7 +408,7 @@ createdAt: new Date().toISOString()
 
 saveData();
 renderPage();
-showToast("Your notes have been saved! 💙");
+showToast("Notes saved! 💙");
 }
 
 function deleteNote(id) {
@@ -520,52 +424,31 @@ showToast("Note deleted.");
 /* ---------- DOCUMENTS ---------- */
 
 function renderDocumentsPage() {
-const list = state.documents.map(function (file) {
-return `
-<div class="list-item">
-<div class="list-icon">📄</div>
-
-    <div class="list-item-content">
-      <strong>${escapeHTML(file.name)}</strong>
-      <small>${escapeHTML(file.size)} · ${formatDate(file.createdAt)}</small>
-    </div>
-
-    <button class="action-button danger"
-            data-action="delete-document"
-            data-id="${escapeHTML(file.id)}">Remove</button>
-  </div>
-`;
-
+const items = state.documents.map(function (file) {
+return "<div class="list-item"> <div class="list-icon">📄</div> <div class="list-item-content"> <strong>${escapeHTML(file.name)}</strong> <small>${escapeHTML(file.size)} · ${formatDate(file.createdAt)}</small> </div> <button class="action-button danger" data-action="delete-document" data-id="${escapeHTML(file.id)}">Remove</button> </div>";
 }).join("");
 
 return `
 <h1 class="page-heading">My <span class="gradient-text">Documents</span></h1>
-<p class="page-subtitle">Select your study files and keep track of them here.</p>
+<p class="page-subtitle">Keep your study file list organised.</p>
 
 <div class="card">
   <form id="documentForm" class="form-stack">
-    <label class="form-label">
-      Choose a document
+    <label class="form-label">Choose a file
       <input class="field" type="file" id="documentInput"
              accept=".pdf,.txt,.docx,.pptx">
     </label>
 
-    <p class="small-text muted">
-      Supported formats: PDF, TXT, DOCX and PPTX. Maximum 10 MB.
-    </p>
+    <p class="small-text muted">PDF, TXT, DOCX, PPTX · Maximum 10 MB.</p>
 
     <button class="action-button primary" type="submit">＋ Add Document</button>
   </form>
 </div>
 
-<h2 class="section-title">Your documents (${state.documents.length})</h2>
-<div class="list-stack">
-  ${list || '<div class="empty-state">📂<br>No documents added yet.</div>'}
-</div>
+<h2 class="section-title">Documents (${state.documents.length})</h2>
+<div class="list-stack">${items || '<div class="empty-state">📚<br>No documents added yet.</div>'}</div>
 
-<p class="small-text muted">
-  This page currently stores file details only, not file contents.
-</p>
+<p class="small-text muted">This version saves file details only. AI file reading needs an additional backend feature.</p>
 
 `;
 }
@@ -581,14 +464,14 @@ return;
 }
 
 if (file.size > 10 * 1024 * 1024) {
-showToast("File must be smaller than 10 MB.");
+showToast("The maximum file size is 10 MB.");
 return;
 }
 
 const extension = file.name.split(".").pop().toLowerCase();
 
 if (!["pdf", "txt", "docx", "pptx"].includes(extension)) {
-showToast("That file format is not supported.");
+showToast("Unsupported file type.");
 return;
 }
 
@@ -601,7 +484,7 @@ createdAt: new Date().toISOString()
 
 saveData();
 renderPage();
-showToast("Document added to your list. 📚");
+showToast("Document added.");
 }
 
 function deleteDocument(id) {
@@ -614,7 +497,7 @@ renderPage();
 showToast("Document removed.");
 }
 
-/* ---------- YOUTUBE STUDY ---------- */
+/* ---------- YOUTUBE ---------- */
 
 function isValidYouTubeURL(value) {
 try {
@@ -638,39 +521,22 @@ return false;
 }
 
 function renderYoutubePage() {
-const list = state.videos.map(function (video) {
-return `
-<div class="list-item">
-<div class="list-icon">▶️</div>
-
-    <div class="list-item-content">
-      <strong>${escapeHTML(video.title)}</strong>
-      <small>${escapeHTML(video.url)}</small>
-      <small>Added ${formatDate(video.createdAt)}</small>
-    </div>
-
-    <button class="action-button danger"
-            data-action="delete-video"
-            data-id="${escapeHTML(video.id)}">Remove</button>
-  </div>
-`;
-
+const items = state.videos.map(function (video) {
+return "<div class="list-item"> <div class="list-icon">▶️</div> <div class="list-item-content"> <strong>${escapeHTML(video.title)}</strong> <small>${escapeHTML(video.url)}</small> <small>${formatDate(video.createdAt)}</small> </div> <button class="action-button danger" data-action="delete-video" data-id="${escapeHTML(video.id)}">Remove</button> </div>";
 }).join("");
 
 return `
 <h1 class="page-heading">YouTube <span class="gradient-text">Study</span></h1>
-<p class="page-subtitle">Organise lecture links for your study sessions.</p>
+<p class="page-subtitle">Save lecture links for later.</p>
 
 <div class="card">
   <form id="youtubeForm" class="form-stack">
-    <label class="form-label">
-      Lecture title
+    <label class="form-label">Lecture title
       <input class="field" id="videoTitle" maxlength="150"
-             placeholder="Example: Java Programming Lecture 1" required>
+             placeholder="Lecture title" required>
     </label>
 
-    <label class="form-label">
-      YouTube link
+    <label class="form-label">YouTube URL
       <input class="field" id="videoURL" type="url"
              placeholder="https://www.youtube.com/watch?v=..." required>
     </label>
@@ -680,13 +546,9 @@ return `
 </div>
 
 <h2 class="section-title">Saved lectures (${state.videos.length})</h2>
-<div class="list-stack">
-  ${list || '<div class="empty-state">🎬<br>No lectures saved yet.</div>'}
-</div>
+<div class="list-stack">${items || '<div class="empty-state">🎬<br>No lectures saved yet.</div>'}</div>
 
-<p class="small-text muted">
-  Transcript extraction and automatic notes need an additional backend feature.
-</p>
+<p class="small-text muted">Transcript extraction and AI summaries are not connected in this version.</p>
 
 `;
 }
@@ -697,13 +559,8 @@ event.preventDefault();
 const title = $("#videoTitle")?.value.trim();
 const url = $("#videoURL")?.value.trim();
 
-if (!title || !url) {
-showToast("Enter a title and YouTube link.");
-return;
-}
-
-if (!isValidYouTubeURL(url)) {
-showToast("Please enter a valid YouTube video link.");
+if (!title || !url || !isValidYouTubeURL(url)) {
+showToast("Enter a title and valid YouTube link.");
 return;
 }
 
@@ -732,80 +589,41 @@ showToast("Lecture removed.");
 /* ---------- GROUP STUDY ---------- */
 
 function renderGroupsPage() {
-const groupsHTML = state.groups.map(function (group) {
-return `
-<div class="list-item">
-<div class="list-icon">👥</div>
-
-    <div class="list-item-content">
-      <strong>${escapeHTML(group.name)}</strong>
-      <small>${escapeHTML(group.subject)} · ${group.members.length} member(s)</small>
-      <small>Invite code: ${escapeHTML(group.code)}</small>
-    </div>
-
-    <div class="button-row">
-      <button class="action-button"
-              data-action="copy-invite"
-              data-id="${escapeHTML(group.id)}">Invite</button>
-
-      <button class="action-button"
-              data-action="open-group"
-              data-id="${escapeHTML(group.id)}">Open</button>
-    </div>
-  </div>
-`;
-
+const items = state.groups.map(function (group) {
+return "<div class="list-item"> <div class="list-icon">👥</div> <div class="list-item-content"> <strong>${escapeHTML(group.name)}</strong> <small>${escapeHTML(group.subject)} · ${group.members.length} member(s)</small> <small>Invite code: ${escapeHTML(group.code)}</small> </div> <div class="button-row"> <button class="action-button" data-action="copy-invite" data-id="${escapeHTML(group.id)}">Invite</button> <button class="action-button" data-action="open-group" data-id="${escapeHTML(group.id)}">Open</button> </div> </div>";
 }).join("");
 
 return `
 <h1 class="page-heading">Group <span class="gradient-text">Study</span></h1>
-<p class="page-subtitle">Create a study group and organise your learning together.</p>
+<p class="page-subtitle">Create a study group and set a shared goal.</p>
 
 <div class="card">
-  <h3>✨ Create a new study group</h3>
-
   <form id="groupForm" class="form-stack">
-    <label class="form-label">
-      Group name
-      <input class="field" id="groupName" maxlength="80"
-             placeholder="Example: AI & Data Science Squad" required>
+    <label class="form-label">Group name
+      <input class="field" id="groupName" maxlength="80" required>
     </label>
-
-    <label class="form-label">
-      Subject
-      <input class="field" id="groupSubject" maxlength="100"
-             placeholder="Example: Machine Learning" required>
+    <label class="form-label">Subject
+      <input class="field" id="groupSubject" maxlength="100" required>
     </label>
-
-    <label class="form-label">
-      Study goal
-      <textarea class="textarea-field" id="groupGoal"
-                maxlength="1000"
-                placeholder="What will your group study?"></textarea>
+    <label class="form-label">Study goal
+      <textarea class="textarea-field" id="groupGoal" maxlength="1000"></textarea>
     </label>
-
-    <button class="action-button primary" type="submit">＋ Create Study Group</button>
+    <button class="action-button primary" type="submit">＋ Create Group</button>
   </form>
 </div>
 
 <h2 class="section-title">Your groups (${state.groups.length})</h2>
-<div class="list-stack">
-  ${groupsHTML || '<div class="empty-state">👥<br>You have no study groups yet.<br>Create your first group above!</div>'}
-</div>
+<div class="list-stack">${items || '<div class="empty-state">👥<br>Create your first study group!</div>'}</div>
 
 <div class="card" style="margin-top:20px">
-  <h3>🔗 Join with an invite code</h3>
-  <p class="small-text">Demo invite codes work only for groups saved in this browser.</p>
-
+  <h3>Join a group</h3>
   <form id="joinGroupForm" class="form-stack">
-    <label class="form-label">
-      Invite code
-      <input class="field" id="inviteCode" maxlength="30"
-             placeholder="Enter invite code" required>
+    <label class="form-label">Invite code
+      <input class="field" id="inviteCode" maxlength="30" required>
     </label>
-
     <button class="action-button" type="submit">Join Group</button>
   </form>
+  <p class="small-text muted">Joining works for groups saved in this browser. Shared online groups need a database and backend.</p>
 </div>
 
 `;
@@ -823,17 +641,12 @@ showToast("Enter a group name and subject.");
 return;
 }
 
-const code = "LNX-" +
-Math.random().toString(36).slice(2, 6).toUpperCase() +
-"-" +
-Math.random().toString(36).slice(2, 5).toUpperCase();
-
 state.groups.unshift({
 id: makeId(),
 name: name,
 subject: subject,
 goal: goal,
-code: code,
+code: "LNX-" + Math.random().toString(36).slice(2, 7).toUpperCase(),
 members: ["You"],
 messages: [],
 createdAt: new Date().toISOString()
@@ -841,24 +654,7 @@ createdAt: new Date().toISOString()
 
 saveData();
 renderPage();
-
-setBuddyMessage("Your study group is ready! Invite your friends. 💙");
-showToast("Study group created successfully!");
-}
-
-function createInviteMessage(group) {
-return [
-"💙 You're invited to study with me on Lunexa AI!",
-"",
-"📚 Group: " + group.name,
-"📖 Subject: " + group.subject,
-group.goal ? "🎯 Goal: " + group.goal : "",
-"",
-"🔑 Invite code: " + group.code,
-"",
-"Open Lunexa AI and use Group Study to join.",
-"Note: Online joining requires a shared backend."
-].filter(Boolean).join("\n");
+showToast("Group created! 💙");
 }
 
 async function copyText(text) {
@@ -866,23 +662,24 @@ try {
 if (navigator.clipboard && window.isSecureContext) {
 await navigator.clipboard.writeText(text);
 } else {
-const area = document.createElement("textarea");
-area.value = text;
-area.style.position = "fixed";
-area.style.opacity = "0";
-document.body.appendChild(area);
-area.select();
+const input = document.createElement("textarea");
+input.value = text;
+input.style.position = "fixed";
+input.style.opacity = "0";
+document.body.appendChild(input);
+input.select();
 
-  const success = document.execCommand("copy");
-  area.remove();
+  if (!document.execCommand("copy")) {
+    throw new Error("Copy unavailable");
+  }
 
-  if (!success) throw new Error("Copy failed");
+  input.remove();
 }
 
 showToast("Invitation copied! 💙");
 
 } catch (error) {
-window.prompt("Copy this invitation:", text);
+window.prompt("Copy this text:", text);
 }
 }
 
@@ -891,25 +688,26 @@ const group = state.groups.find(function (item) {
 return item.id === id;
 });
 
-if (!group) {
-showToast("Group not found.");
-return;
-}
+if (!group) return;
 
-const message = createInviteMessage(group);
+const text =
+"Join my Lunexa AI study group!\n" +
+"Group: " + group.name + "\n" +
+"Subject: " + group.subject + "\n" +
+"Invite code: " + group.code + "\n" +
+window.location.origin;
 
 if (navigator.share) {
 try {
 await navigator.share({
 title: "Lunexa AI Study Group",
-text: message
+text: text
 });
-showToast("Invitation shared!");
 } catch (error) {
-if (error.name !== "AbortError") copyText(message);
+if (error.name !== "AbortError") copyText(text);
 }
 } else {
-copyText(message);
+copyText(text);
 }
 }
 
@@ -917,11 +715,6 @@ function joinGroup(event) {
 event.preventDefault();
 
 const code = $("#inviteCode")?.value.trim().toUpperCase();
-
-if (!code) {
-showToast("Enter an invite code.");
-return;
-}
 
 const group = state.groups.find(function (item) {
 return item.code.toUpperCase() === code;
@@ -932,9 +725,7 @@ showToast("Group not found in this browser.");
 return;
 }
 
-if (!group.members.includes("You")) {
-group.members.push("You");
-}
+if (!group.members.includes("You")) group.members.push("You");
 
 saveData();
 openGroup(group.id);
@@ -950,93 +741,65 @@ showToast("Group not found.");
 return;
 }
 
+openedGroupId = id;
 currentPage = "groups";
 
 if (pageHeading) pageHeading.textContent = group.name;
 
-document.querySelectorAll(".nav-item").forEach(function (item) {
-item.classList.toggle("active", item.dataset.page === "groups");
+document.querySelectorAll(".nav-item").forEach(function (button) {
+button.classList.toggle("active", button.dataset.page === "groups");
 });
 
-if (sidebar) sidebar.classList.remove("open");
+sidebar?.classList.remove("open");
 
-const messagesHTML = group.messages.map(function (message) {
-return `
-<div class="list-item">
-<div class="list-icon">💬</div>
-
-    <div class="list-item-content">
-      <strong>${escapeHTML(message.author)}</strong>
-      <small>${escapeHTML(message.text)}</small>
-      <small>${formatDate(message.createdAt)}</small>
-    </div>
-  </div>
-`;
-
+const messages = group.messages.map(function (message) {
+return "<div class="list-item"> <div class="list-icon">💬</div> <div class="list-item-content"> <strong>${escapeHTML(message.author)}</strong> <small>${escapeHTML(message.text)}</small> <small>${formatDate(message.createdAt)}</small> </div> </div>";
 }).join("");
 
 pageContainer.innerHTML = `
 <button class="action-button" data-page="groups">← All Groups</button>
-
 <h1 class="page-heading" style="margin-top:20px">${escapeHTML(group.name)}</h1>
 <p class="page-subtitle">${escapeHTML(group.subject)} · ${group.members.length} member(s)</p>
 
 <div class="card">
-  <h3>🎯 Study goal</h3>
+  <h3>Study goal</h3>
   <p>${escapeHTML(group.goal || "Learn together and support each other.")}</p>
-
   <div class="button-row">
-    <button class="action-button primary"
-            data-action="copy-invite"
-            data-id="${escapeHTML(group.id)}">🔗 Invite Friends</button>
-
-    <button class="action-button"
-            data-action="delete-group"
+    <button class="action-button primary" data-action="copy-invite"
+            data-id="${escapeHTML(group.id)}">Invite Friends</button>
+    <button class="action-button danger" data-action="delete-group"
             data-id="${escapeHTML(group.id)}">Delete Group</button>
   </div>
 </div>
 
 <h2 class="section-title">Group discussion</h2>
+<div class="list-stack">${messages || '<div class="empty-state">💬<br>No messages yet.</div>'}</div>
 
-<div class="list-stack" style="margin-bottom:20px">
-  ${messagesHTML || '<div class="empty-state">💬<br>No messages yet.<br>Start the discussion below.</div>'}
-</div>
-
-<div class="card">
+<div class="card" style="margin-top:20px">
   <form id="groupMessageForm" class="form-stack">
-    <label class="form-label">
-      Write a message
-      <textarea class="textarea-field" id="groupMessage"
-                maxlength="2000" placeholder="Share a question or study tip..."
-                required></textarea>
+    <label class="form-label">Your message
+      <textarea class="textarea-field" id="groupMessage" maxlength="2000" required></textarea>
     </label>
-
     <button class="action-button primary" type="submit">Send Message</button>
   </form>
-
-  <p class="small-text muted">Demo messages are saved in this browser only.</p>
+  <p class="small-text muted">Demo discussion is stored locally in this browser.</p>
 </div>
 
 `;
 
-setBuddyMessage("Let's make this group study session productive! 💙");
+setBuddyMessage("Let's study together! 💙");
 }
 
 function sendGroupMessage(event) {
 event.preventDefault();
 
 const group = state.groups.find(function (item) {
-return pageHeading && pageHeading.textContent === item.name;
+return item.id === openedGroupId;
 });
-
-if (!group) {
-showToast("Open a group before sending a message.");
-return;
-}
 
 const text = $("#groupMessage")?.value.trim();
 
-if (!text) {
+if (!group || !text) {
 showToast("Write a message first.");
 return;
 }
@@ -1050,83 +813,50 @@ createdAt: new Date().toISOString()
 
 saveData();
 openGroup(group.id);
-showToast("Message added to the demo discussion.");
 }
 
 function deleteGroup(id) {
-const group = state.groups.find(function (item) {
-return item.id === id;
+if (!window.confirm("Delete this study group?")) return;
+
+state.groups = state.groups.filter(function (group) {
+return group.id !== id;
 });
 
-if (!group || !window.confirm("Delete this study group?")) return;
-
-state.groups = state.groups.filter(function (item) {
-return item.id !== id;
-});
-
+openedGroupId = null;
 saveData();
 navigateTo("groups");
-showToast("Study group deleted.");
+showToast("Group deleted.");
 }
 
 /* ---------- FRIENDS ---------- */
 
 function renderFriendsPage() {
-const friendsHTML = state.friends.map(function (friend) {
-return `
-<div class="list-item">
-<div class="profile-avatar">${escapeHTML(friend.name.charAt(0).toUpperCase())}</div>
-
-    <div class="list-item-content">
-      <strong>${escapeHTML(friend.name)}</strong>
-      <small>${escapeHTML(friend.email || "Lunexa study friend")}</small>
-    </div>
-
-    <button class="action-button danger"
-            data-action="remove-friend"
-            data-id="${escapeHTML(friend.id)}">Remove</button>
-  </div>
-`;
-
+const items = state.friends.map(function (friend) {
+return "<div class="list-item"> <div class="profile-avatar">${escapeHTML(friend.name.charAt(0).toUpperCase())}</div> <div class="list-item-content"> <strong>${escapeHTML(friend.name)}</strong> <small>${escapeHTML(friend.email || "Lunexa study friend")}</small> </div> <button class="action-button danger" data-action="remove-friend" data-id="${escapeHTML(friend.id)}">Remove</button> </div>";
 }).join("");
 
 return `
 <h1 class="page-heading">Study <span class="gradient-text">Friends</span></h1>
-<p class="page-subtitle">Create your study circle and organise your learning.</p>
+<p class="page-subtitle">Build your learning circle.</p>
 
 <div class="card">
-  <h3>♡ Add a friend</h3>
-
   <form id="friendForm" class="form-stack">
-    <label class="form-label">
-      Friend's name
-      <input class="field" id="friendName" maxlength="80"
-             placeholder="Enter their name" required>
+    <label class="form-label">Friend's name
+      <input class="field" id="friendName" maxlength="80" required>
     </label>
-
-    <label class="form-label">
-      Email (optional)
-      <input class="field" id="friendEmail" type="email"
-             maxlength="150" placeholder="friend@example.com">
+    <label class="form-label">Email (optional)
+      <input class="field" id="friendEmail" type="email" maxlength="150">
     </label>
-
     <button class="action-button primary" type="submit">＋ Add Friend</button>
   </form>
 </div>
 
 <h2 class="section-title">My friends (${state.friends.length})</h2>
-
-<div class="list-stack">
-  ${friendsHTML || '<div class="empty-state">♡<br>Your study circle starts here.<br>Add a friend above!</div>'}
-</div>
+<div class="list-stack">${items || '<div class="empty-state">♡<br>Add your first study friend!</div>'}</div>
 
 <div class="card" style="margin-top:20px">
-  <h3>🔗 Invite a friend to Lunexa</h3>
-  <p class="small-text">Share an invitation to Lunexa AI.</p>
-
-  <button class="action-button primary" data-action="share-lunexa">
-    Share Lunexa Invite
-  </button>
+  <h3>Invite a friend</h3>
+  <button class="action-button primary" data-action="share-lunexa">Share Lunexa</button>
 </div>
 
 `;
@@ -1139,14 +869,14 @@ const name = $("#friendName")?.value.trim();
 const email = $("#friendEmail")?.value.trim();
 
 if (!name) {
-showToast("Enter your friend's name.");
+showToast("Enter a friend's name.");
 return;
 }
 
 if (email && state.friends.some(function (friend) {
 return friend.email.toLowerCase() === email.toLowerCase();
 })) {
-showToast("This friend is already in your list.");
+showToast("Friend already exists.");
 return;
 }
 
@@ -1159,7 +889,7 @@ createdAt: new Date().toISOString()
 
 saveData();
 renderPage();
-showToast("Friend added to your study list! 💙");
+showToast("Friend added! 💙");
 }
 
 function removeFriend(id) {
@@ -1173,24 +903,18 @@ showToast("Friend removed.");
 }
 
 async function shareLunexa() {
-const text = [
-"💙 Let's study together!",
-"",
-"I'm organising my study sessions with Lunexa AI.",
-"Join me on Lunexa AI: " + window.location.origin
-].join("\n");
+const url = window.location.origin;
+const text = "Let's study together with Lunexa AI! 💙 " + url;
 
 if (navigator.share) {
 try {
 await navigator.share({
 title: "Lunexa AI",
 text: text,
-url: window.location.origin
+url: url
 });
 } catch (error) {
-if (error.name !== "AbortError") {
-copyText(text);
-}
+if (error.name !== "AbortError") copyText(text);
 }
 } else {
 copyText(text);
@@ -1202,12 +926,7 @@ copyText(text);
 const quizQuestions = [
 {
 question: "What does AI stand for?",
-options: [
-"Automated Internet",
-"Artificial Intelligence",
-"Advanced Interface",
-"Applied Information"
-],
+options: ["Automated Internet", "Artificial Intelligence", "Advanced Interface", "Applied Information"],
 answer: 1,
 explanation: "AI stands for Artificial Intelligence."
 },
@@ -1218,92 +937,76 @@ answer: 0,
 explanation: "Python is widely used for data analysis and machine learning."
 },
 {
-question: "What is the main purpose of HTML?",
-options: [
-"Store passwords",
-"Train neural networks",
-"Structure web pages",
-"Manage operating systems"
-],
+question: "What is the purpose of HTML?",
+options: ["Store passwords", "Train neural networks", "Structure web pages", "Manage operating systems"],
 answer: 2,
-explanation: "HTML defines the structure and content of a web page."
+explanation: "HTML defines the structure and content of web pages."
 }
 ];
 
 function renderQuizPage() {
 const question = quizQuestions[activeQuiz];
 
-const optionsHTML = question.options.map(function (option, index) {
+const options = question.options.map(function (option, index) {
 return "<button class="quiz-option" data-action="answer-quiz" data-answer="${index}"> ${String.fromCharCode(65 + index)}. ${escapeHTML(option)} </button>";
 }).join("");
 
 return `
 <h1 class="page-heading">Quiz & <span class="gradient-text">Flashcards</span></h1>
-<p class="page-subtitle">Practise with this sample quiz.</p>
+<p class="page-subtitle">Practise your knowledge with a sample quiz.</p>
 
 <div class="card">
   <p class="eyebrow">QUESTION ${activeQuiz + 1} OF ${quizQuestions.length}</p>
   <h3>${escapeHTML(question.question)}</h3>
-
-  <div id="quizOptions">${optionsHTML}</div>
+  <div id="quizOptions">${options}</div>
   <div id="quizFeedback"></div>
 
-  <button class="action-button primary"
-          id="nextQuestion"
-          data-action="next-quiz"
-          style="display:none;margin-top:15px">
+  <button class="action-button primary" id="nextQuestion"
+          data-action="next-quiz" style="display:none;margin-top:15px">
     Next Question →
   </button>
 </div>
 
-<div class="card" style="margin-top:18px">
-  <h3>🃏 Flashcards</h3>
-  <p>Use this card to remember an important concept.</p>
-
-  <button class="action-button"
-          data-action="flip-card"
-          data-state="question">Show flashcard answer</button>
-
+<div class="card" style="margin-top:20px">
+  <h3>🃏 Flashcard</h3>
   <p id="flashcardContent" class="feedback">Question: What is AI?</p>
+  <button class="action-button" data-action="flip-card" data-state="question">
+    Show answer
+  </button>
 </div>
 
 `;
 }
 
-function answerQuiz(answer) {
+function answerQuiz(value) {
 if (quizAnswered) return;
 
 const question = quizQuestions[activeQuiz];
+const selected = Number(value);
 const feedback = $("#quizFeedback");
 
-if (!question || !feedback) return;
+if (!feedback) return;
 
 quizAnswered = true;
-
-const selected = Number(answer);
-const correct = selected === question.answer;
 
 document.querySelectorAll(".quiz-option").forEach(function (button, index) {
 button.disabled = true;
 
-if (index === question.answer) {
-  button.classList.add("correct");
-} else if (index === selected) {
+if (index === question.answer) button.classList.add("correct");
+if (index === selected && index !== question.answer) {
   button.classList.add("incorrect");
 }
 
 });
 
-feedback.innerHTML = "<div class="feedback"> ${correct ? "✅ Correct!" : "💡 Not quite!"} ${escapeHTML(question.explanation)} </div>";
+feedback.innerHTML = "<div class="feedback"> ${selected === question.answer ? "✅ Correct!" : "💡 Not quite!"} ${escapeHTML(question.explanation)} </div>";
 
-const nextButton = $("#nextQuestion");
+const next = $("#nextQuestion");
 
-if (nextButton) {
-nextButton.style.display = "inline-flex";
-nextButton.textContent =
-activeQuiz === quizQuestions.length - 1
-? "Restart Quiz ↻"
-: "Next Question →";
+if (next) {
+next.style.display = "inline-flex";
+next.textContent =
+activeQuiz === quizQuestions.length - 1 ? "Restart Quiz ↻" : "Next Question →";
 }
 }
 
@@ -1313,7 +1016,7 @@ showToast("Answer the question first.");
 return;
 }
 
-activeQuiz = activeQuiz === quizQuestions.length - 1 ? 0 : activeQuiz + 1;
+activeQuiz = (activeQuiz + 1) % quizQuestions.length;
 quizAnswered = false;
 renderPage();
 }
@@ -1328,48 +1031,31 @@ content.textContent =
 "Answer: AI stands for Artificial Intelligence. It enables computers to perform tasks that usually require human intelligence.";
 
 button.dataset.state = "answer";
-button.textContent = "Show question ↻";
+button.textContent = "Show question";
 
 } else {
 content.textContent = "Question: What is AI?";
 button.dataset.state = "question";
-button.textContent = "Show flashcard answer";
+button.textContent = "Show answer";
 }
 }
 
-/* ---------- CHAT HISTORY ---------- */
+/* ---------- HISTORY ---------- */
 
 function renderHistoryPage() {
-const historyHTML = state.chats.map(function (chat) {
-return `
-<div class="list-item">
-<div class="list-icon">◷</div>
-
-    <div class="list-item-content">
-      <strong>${escapeHTML(chat.title)}</strong>
-      <small>${formatDate(chat.createdAt)}</small>
-      <small>${chat.messages.length} messages</small>
-    </div>
-
-    <button class="action-button"
-            data-action="restore-chat"
-            data-id="${escapeHTML(chat.id)}">Open</button>
-  </div>
-`;
-
+const items = state.chats.map(function (chat) {
+return "<div class="list-item"> <div class="list-icon">◷</div> <div class="list-item-content"> <strong>${escapeHTML(chat.title)}</strong> <small>${formatDate(chat.createdAt)}</small> <small>${chat.messages.length} messages</small> </div> <button class="action-button" data-action="restore-chat" data-id="${escapeHTML(chat.id)}">Open</button> </div>";
 }).join("");
 
 return `
 <h1 class="page-heading">Chat <span class="gradient-text">History</span></h1>
 <p class="page-subtitle">Revisit your saved study conversations.</p>
 
-<div class="list-stack">
-  ${historyHTML || '<div class="empty-state">◷<br>No previous chats yet.<br>Start a chat and create a new session to save it here.</div>'}
-</div>
+<div class="list-stack">${items || '<div class="empty-state">◷<br>No previous chats yet.</div>'}</div>
 
-<button class="action-button primary"
-        data-action="new-chat"
-        style="margin-top:20px">＋ Start New Chat</button>
+<button class="action-button primary" data-action="new-chat" style="margin-top:20px">
+  ＋ New Chat
+</button>
 
 `;
 }
@@ -1387,17 +1073,15 @@ return;
 state.messages = chat.messages.slice();
 saveData();
 navigateTo("chat");
-showToast("Previous chat restored.");
+showToast("Chat restored.");
 }
 
-/* ---------- EVENT DELEGATION ---------- */
+/* ---------- CLICK EVENTS ---------- */
 
 document.addEventListener("click", function (event) {
-const target = event.target;
+if (!(event.target instanceof Element)) return;
 
-if (!(target instanceof Element)) return;
-
-const pageButton = target.closest("[data-page]");
+const pageButton = event.target.closest("[data-page]");
 
 if (pageButton) {
 event.preventDefault();
@@ -1405,30 +1089,25 @@ navigateTo(pageButton.dataset.page);
 return;
 }
 
-const actionButton = target.closest("[data-action]");
+const button = event.target.closest("[data-action]");
 
-if (!actionButton) return;
+if (!button) return;
 
-const action = actionButton.dataset.action;
-const id = actionButton.dataset.id;
+const id = button.dataset.id;
 
-switch (action) {
+switch (button.dataset.action) {
 case "new-chat":
 startNewChat();
 break;
 
 case "toggle-theme":
   document.body.classList.toggle("light-theme");
-
-  state.theme = document.body.classList.contains("light-theme")
-    ? "light"
-    : "dark";
-
+  state.theme = document.body.classList.contains("light-theme") ? "light" : "dark";
   saveData();
   break;
 
 case "prompt":
-  sendChatMessage(actionButton.dataset.prompt || "");
+  sendChatMessage(button.dataset.prompt || "");
   break;
 
 case "delete-note":
@@ -1455,16 +1134,16 @@ case "delete-group":
   deleteGroup(id);
   break;
 
-case "share-lunexa":
-  shareLunexa();
-  break;
-
 case "remove-friend":
   removeFriend(id);
   break;
 
+case "share-lunexa":
+  shareLunexa();
+  break;
+
 case "answer-quiz":
-  answerQuiz(actionButton.dataset.answer);
+  answerQuiz(button.dataset.answer);
   break;
 
 case "next-quiz":
@@ -1472,7 +1151,7 @@ case "next-quiz":
   break;
 
 case "flip-card":
-  flipFlashcard(actionButton);
+  flipFlashcard(button);
   break;
 
 case "restore-chat":
@@ -1482,7 +1161,7 @@ case "restore-chat":
 }
 });
 
-/* ---------- FORM SUBMISSION ---------- */
+/* ---------- FORM EVENTS ---------- */
 
 document.addEventListener("submit", function (event) {
 const form = event.target;
@@ -1492,10 +1171,7 @@ case "chatForm":
 event.preventDefault();
 
   if (!chatRequestPending) {
-    const input = $("#chatInput");
-    const message = input ? input.value : "";
-
-    sendChatMessage(message);
+    sendChatMessage($("#chatInput")?.value || "");
   }
   break;
 
@@ -1532,18 +1208,13 @@ case "groupMessageForm":
 
 /* ---------- MOBILE MENU ---------- */
 
-const menuToggle = $("#menuToggle");
-
-if (menuToggle) {
-menuToggle.addEventListener("click", function () {
+$("#menuToggle")?.addEventListener("click", function () {
 sidebar?.classList.toggle("open");
 });
-}
 
 document.addEventListener("click", function (event) {
 if (!(event.target instanceof Element)) return;
-
-if (!sidebar || !sidebar.classList.contains("open")) return;
+if (!sidebar?.classList.contains("open")) return;
 
 if (
 !sidebar.contains(event.target) &&
@@ -1553,21 +1224,19 @@ sidebar.classList.remove("open");
 }
 });
 
-/* ---------- KEYBOARD SHORTCUT ---------- */
+/* ---------- KEYBOARD ---------- */
 
 document.addEventListener("keydown", function (event) {
 if (
 currentPage === "chat" &&
+event.target?.id === "chatInput" &&
 event.key === "Enter" &&
-!event.shiftKey &&
-event.target?.id === "chatInput"
+!event.shiftKey
 ) {
 event.preventDefault();
 
-const form = $("#chatForm");
-
-if (form && typeof form.requestSubmit === "function") {
-  form.requestSubmit();
+if (!chatRequestPending) {
+  $("#chatForm")?.requestSubmit();
 }
 
 }
@@ -1581,8 +1250,7 @@ document.body.classList.add("light-theme");
 }
 
 navigateTo("chat");
-
-console.log("Lunexa AI initialised successfully.");
+console.log("Lunexa AI is ready.");
 }
 
 initialiseApp();
