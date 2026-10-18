@@ -1,241 +1,189 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#071329">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  <meta name="theme-color" content="#080d20"><meta
+name="description"
+content="Lunexa AI is your personal AI study companion for learning, notes, quizzes and study planning."
 
-  <title>Lunexa AI | Your Study Universe</title>
+«»
 
-  <link rel="stylesheet" href="style.css">
-</head>
+  <title>Lunexa AI — Your Study Companion</title>  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >  <link rel="stylesheet" href="./style.css">  <script src="./app.js" defer></script></head><body>  <div class="app-shell"><aside class="sidebar" id="sidebar">
 
-<body>
+  <a href="#" class="brand" data-page="chat">
+    <span class="brand-icon">✦</span>
 
-<div class="app-shell">
+    <span>
+      <strong>Lunexa</strong>
+      <small>AI STUDY COMPANION</small>
+    </span>
+  </a>
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
+  <button class="new-chat-button" data-action="new-chat">
+    <span>＋</span>
+    New conversation
+  </button>
 
-    <div class="brand">
-      <div class="brand-logo">✦</div>
-      <div>
-        <h2>Lunexa<span> AI</span></h2>
-        <small>Your study universe</small>
-      </div>
-    </div>
+  <div class="nav-label">WORKSPACE</div>
 
-    <button class="primary-button new-chat" data-action="new-chat">
-      ＋ New Chat
+  <nav class="navigation">
+
+    <button class="nav-item active" data-page="chat">
+      <span>◈</span> AI Chat
     </button>
 
-    <div class="nav-label">WORKSPACE</div>
+    <button class="nav-item" data-page="notes">
+      <span>▤</span> Study Notes
+    </button>
 
-    <nav class="navigation" id="navigation">
+    <button class="nav-item" data-page="documents">
+      <span>▧</span> My Documents
+    </button>
 
-      <button class="nav-item active" data-page="chat">
-        <span>✧</span> AI Chat
-      </button>
+    <button class="nav-item" data-page="youtube">
+      <span>▷</span> YouTube Study
+    </button>
 
-      <button class="nav-item" data-page="notes">
-        <span>▤</span> Study Notes
-      </button>
+    <button class="nav-item" data-page="quiz">
+      <span>✧</span> Quiz & Flashcards
+    </button>
 
-      <button class="nav-item" data-page="documents">
-        <span>▧</span> Documents
-      </button>
+  </nav>
 
-      <button class="nav-item" data-page="youtube">
-        <span>▷</span> YouTube Study
-      </button>
+  <div class="nav-label">COMMUNITY</div>
 
-      <button class="nav-item" data-page="quiz">
-        <span>✎</span> Quiz & Flashcards
-      </button>
+  <nav class="navigation">
 
-      <button class="nav-item" data-page="groups">
-        <span>♧</span> Group Study
-        <span class="nav-badge">NEW</span>
-      </button>
+    <button class="nav-item" data-page="groups">
+      <span>♧</span> Group Study
+    </button>
 
-      <button class="nav-item" data-page="friends">
-        <span>♡</span> Friends
-      </button>
+    <button class="nav-item" data-page="friends">
+      <span>♡</span> Friends
+    </button>
 
-      <button class="nav-item" data-page="history">
-        <span>◷</span> Chat History
-      </button>
+    <button class="nav-item" data-page="history">
+      <span>◷</span> Chat History
+    </button>
 
-    </nav>
+  </nav>
 
-    <div class="sidebar-bottom">
-      <div class="profile-avatar">K</div>
+  <div class="sidebar-bottom">
 
-      <div class="profile-details">
-        <strong>My Study Space</strong>
-        <small>Keep learning ✨</small>
+    <div class="sidebar-assistant">
+      <div class="mini-avatar">✦</div>
+
+      <div>
+        <strong>Lunexa AI</strong>
+        <small>Here to help you learn</small>
       </div>
 
-      <button class="icon-button" data-action="toggle-theme"
-              aria-label="Toggle theme">☼</button>
+      <span class="online-dot"></span>
     </div>
 
-  </aside>
+    <button class="theme-button" data-action="toggle-theme">
+      ◐ Toggle appearance
+    </button>
 
+  </div>
 
-  <!-- MAIN CONTENT -->
-  <main class="main-panel">
+</aside>
 
-    <header class="topbar">
+<main class="main-area">
 
-      <button class="icon-button mobile-menu"
-              id="menuToggle"
-              aria-label="Open menu">☰</button>
+  <header class="topbar">
 
-      <div class="topbar-title">
-        <span class="online-dot"></span>
-        <span id="pageHeading">AI Chat</span>
-      </div>
+    <button
+      class="menu-toggle"
+      id="menuToggle"
+      aria-label="Open navigation"
+    >☰</button>
 
-      <button class="profile-button" data-page="friends">
-        <span>♡</span> Friends
-      </button>
-
-    </header>
-
-
-    <!-- JAVASCRIPT RENDERS PAGES HERE -->
-    <section class="page-container" id="pageContainer"></section>
-
-  </main>
-
-
-  <!-- AI BUDDY PANEL -->
-  <aside class="buddy-panel">
-
-    <div class="buddy-card">
-
-      <div class="buddy-topline">
-        <div>
-          <span class="online-dot"></span>
-          <strong>Lunexa</strong>
-        </div>
-
-        <span class="buddy-tag">AI BUDDY</span>
-      </div>
-
-
-      <div class="buddy-scene">
-
-        <div class="buddy-glow"></div>
-
-        <div class="floating-star star-a">✦</div>
-        <div class="floating-star star-b">✧</div>
-        <div class="floating-star star-c">✦</div>
-
-        <div class="buddy-character" id="buddyCharacter">
-
-          <div class="hair-back"></div>
-
-          <div class="neck"></div>
-
-          <div class="torso">
-            <div class="shirt-collar"></div>
-            <div class="shirt-symbol">✦</div>
-          </div>
-
-          <div class="arm arm-left"></div>
-          <div class="arm arm-right"></div>
-
-          <div class="head">
-
-            <div class="hair-cap"></div>
-            <div class="hair-lock lock-left"></div>
-            <div class="hair-lock lock-right"></div>
-
-            <div class="ear ear-left"></div>
-            <div class="ear ear-right"></div>
-
-            <div class="eyebrow brow-left"></div>
-            <div class="eyebrow brow-right"></div>
-
-            <div class="eye eye-left">
-              <div class="pupil"></div>
-            </div>
-
-            <div class="eye eye-right">
-              <div class="pupil"></div>
-            </div>
-
-            <div class="cheek cheek-left"></div>
-            <div class="cheek cheek-right"></div>
-
-            <div class="nose"></div>
-            <div class="mouth"></div>
-
-          </div>
-
-        </div>
-
-        <div class="buddy-speech" id="buddySpeech">
-          Hey bestie! Let's study together! 💙
-        </div>
-
-      </div>
-
-
-      <div class="buddy-description">
-        <div class="buddy-name">Your study bestie 💙</div>
-
-        <p id="buddyDescription">
-          Ask me questions, organise your notes, and make learning fun.
-        </p>
-      </div>
-
-
-      <div class="buddy-stats">
-
-        <div>
-          <span>✧</span>
-          <strong>Curious</strong>
-          <small>Always learning</small>
-        </div>
-
-        <div>
-          <span>♡</span>
-          <strong>Supportive</strong>
-          <small>Here to help</small>
-        </div>
-
-      </div>
-
-
-      <div class="buddy-tip">
-        <span class="tip-icon">💡</span>
-
-        <div>
-          <strong>Today's little tip</strong>
-          <p>Small steps every day create big results.</p>
-        </div>
-      </div>
-
+    <div class="topbar-title">
+      <span class="topbar-overline">YOUR PERSONAL LEARNING SPACE</span>
+      <h2 id="pageHeading">AI Chat</h2>
     </div>
 
-    <div class="buddy-footer">
-      Made for curious minds ✨
+    <div class="topbar-profile">
+      <span class="profile-status"></span>
+      <span>Study mode</span>
     </div>
 
-  </aside>
+  </header>
 
-</div>
+  <section id="pageContainer" class="page-container">
+    <div class="loading-state">Loading Lunexa...</div>
+  </section>
 
+  <footer class="app-footer">
+    Made for curious minds <span>💙</span>
+  </footer>
 
-<!-- TOAST NOTIFICATIONS -->
-<div class="toast" id="toast" role="status"></div>
+</main>
 
+<aside class="buddy-panel" id="buddyPanel">
 
-<!-- JAVASCRIPT -->
-<script src="app.js"></script>
+  <div class="buddy-card">
 
-</body>
+    <div class="buddy-orbit">
+      <div class="buddy-sparkle sparkle-one">✦</div>
+      <div class="buddy-sparkle sparkle-two">✧</div>
+
+      <div class="buddy-avatar">
+
+        <div class="avatar-hair"></div>
+
+        <div class="avatar-face">
+          <div class="avatar-eye eye-left"></div>
+          <div class="avatar-eye eye-right"></div>
+          <div class="avatar-blush blush-left"></div>
+          <div class="avatar-blush blush-right"></div>
+          <div class="avatar-mouth"></div>
+        </div>
+
+        <div class="avatar-neck"></div>
+        <div class="avatar-body"></div>
+
+      </div>
+    </div>
+
+    <div class="buddy-status">
+      <span class="online-dot"></span>
+      YOUR AI BUDDY
+    </div>
+
+    <h3>Hey, bestie! 💙</h3>
+
+    <p id="buddySpeech">
+      Your little study companion is ready!
+    </p>
+
+    <div class="buddy-divider"></div>
+
+    <div class="buddy-tip">
+      <span>✦</span>
+
+      <div>
+        <strong>Little reminder</strong>
+        <p>Every expert was once a beginner.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="buddy-mini-card">
+    <span>🌙</span>
+
+    <div>
+      <strong>Dream big</strong>
+      <p>One concept at a time.</p>
+    </div>
+  </div>
+
+</aside>
+
+  </div>  <div id="toast" class="toast" role="status" aria-live="polite"></div></body>
 </html>
