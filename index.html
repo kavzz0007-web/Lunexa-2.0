@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Lunexa AI — Your Study Companion</title>
+
+    <meta
+        name="description"
+        content="Lunexa AI is your personal AI-powered study companion."
+    >
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- MOBILE OVERLAY -->
+    <div class="overlay" id="overlay"></div>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+
+        <div class="brand">
+            <div class="brand-logo">L</div>
+
+            <div class="brand-text">
+                <h2>Lunexa<span>AI</span></h2>
+                <p>YOUR STUDY UNIVERSE</p>
+            </div>
+
+            <button
+                class="close-sidebar"
+                id="closeSidebar"
+                aria-label="Close sidebar"
+            >×</button>
+        </div>
+
+        <button class="new-chat-btn" id="newChat">
+            <span>＋</span>
+            <span>New conversation</span>
+        </button>
+
+        <div class="nav-section">
+            <p class="section-label">WORKSPACE</p>
+
+            <button class="nav-item active" data-page="chat">
+                <span class="nav-icon">✦</span>
+                <span>AI Assistant</span>
+            </button>
+
+            <button class="nav-item" data-page="documents">
+                <span class="nav-icon">▤</span>
+                <span>My Documents</span>
+            </button>
+
+            <button class="nav-item" data-page="notes">
+                <span class="nav-icon">✎</span>
+                <span>Smart Notes</span>
+            </button>
+
+            <button class="nav-item" data-page="youtube">
+                <span class="nav-icon">▷</span>
+                <span>YouTube Study</span>
+            </button>
+
+            <button class="nav-item" data-page="quiz">
+                <span class="nav-icon">◎</span>
+                <span>Quiz & Flashcards</span>
+            </button>
+
+            <button class="nav-item" data-page="library">
+                <span class="nav-icon">▣</span>
+                <span>Study Library</span>
+            </button>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="nav-section">
+            <p class="section-label">YOUR SPACE</p>
+
+            <button class="nav-item" data-page="history">
+                <span class="nav-icon">◷</span>
+                <span>Recent Chats</span>
+            </button>
+        </div>
+
+        <div class="sidebar-spacer"></div>
+
+        <!-- MINI ASSISTANT CARD -->
+        <div class="mini-assistant-card">
+
+            <div class="mini-character">
+                <div class="mini-hair"></div>
+                <div class="mini-face">
+                    <span class="mini-eye"></span>
+                    <span class="mini-eye"></span>
+                    <span class="mini-smile"></span>
+                </div>
+                <div class="mini-body"></div>
+            </div>
+
+            <div>
+                <strong>Luna is here!</strong>
+                <p>Your study buddy 💙</p>
+            </div>
+
+            <span class="online-dot"></span>
+        </div>
+
+        <div class="profile">
+            <div class="profile-avatar">K</div>
+
+            <div class="profile-info">
+                <strong>My Workspace</strong>
+                <span>Personal account</span>
+            </div>
+
+            <span class="profile-menu">•••</span>
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+
+        <!-- TOPBAR -->
+        <header class="topbar">
+
+            <button
+                class="menu-button"
+                id="menuButton"
+                aria-label="Open menu"
+            >☰</button>
+
+            <div class="breadcrumb">
+                <span class="breadcrumb-muted">Lunexa</span>
+                <span class="breadcrumb-separator">/</span>
+                <span id="pageTitle">AI Assistant</span>
+            </div>
+
+            <div class="topbar-right">
+
+                <div class="status-pill">
+                    <span class="status-dot"></span>
+                    <span>Study mode</span>
+                </div>
+
+                <button
+                    class="icon-button"
+                    id="themeButton"
+                    aria-label="Toggle theme"
+                    title="Toggle theme"
+                >☼</button>
+
+                <div class="top-avatar">K</div>
+
+            </div>
+
+        </header>
+
+
+        <!-- PAGE CONTENT -->
+        <div class="content" id="pageContent">
+
+            <!-- CHAT PAGE -->
+            <section class="chat-page" id="chatPage">
+
+                <div class="welcome-section">
+
+                    <div class="welcome-badge">
+                        <span>✦</span>
+                        YOUR PERSONAL AI STUDY COMPANION
+                    </div>
+
+                    <h1>
+                        Hey there, learner!<br>
+                        <span>What shall we explore today?</span>
+                    </h1>
+
+                    <p class="welcome-description">
+                        I'm Luna, your little AI study buddy.
+                        Let's turn confusing topics into clear ideas
+                        and make studying a little more magical.
+                    </p>
+
+                </div>
+
+
+                <!-- ANIMATED GIRL ASSISTANT -->
+                <div class="assistant-stage">
+
+                    <div class="orbit orbit-one"></div>
+                    <div class="orbit orbit-two"></div>
+
+                    <div class="sparkle sparkle-one">✦</div>
+                    <div class="sparkle sparkle-two">✧</div>
+                    <div class="sparkle sparkle-three">✦</div>
+                    <div class="sparkle sparkle-four">·</div>
+
+                    <div class="assistant-character" id="assistantCharacter">
+
+                        <div class="character-shadow"></div>
+
+                        <!-- HAIR -->
+                        <div class="character-hair-back"></div>
+
+                        <!-- BODY -->
+                        <div class="character-body">
+                            <div class="hoodie-neck"></div>
+                            <div class="hoodie-logo">L</div>
+                            <div class="hoodie-pocket"></div>
+                        </div>
+
+                        <!-- ARMS -->
+                        <div class="character-arm arm-left"></div>
+                        <div class="character-arm arm-right"></div>
+
+                        <!-- HEAD -->
+                        <div class="character-head">
+
+                            <div class="character-ear ear-left"></div>
+                            <div class="character-ear ear-right"></div>
+
+                            <div class="character-hair-top"></div>
+                            <div class="character-bang bang-left"></div>
+                            <div class="character-bang bang-right"></div>
+
+                            <div class="character-eyebrow eyebrow-left"></div>
+                            <div class="character-eyebrow eyebrow-right"></div>
+
+                            <div class="character-eye eye-left">
+                                <span></span>
+                            </div>
+
+                            <div class="character-eye eye-right">
+                                <span></span>
+                            </div>
+
+                            <div class="character-blush blush-left"></div>
+                            <div class="character-blush blush-right"></div>
+
+                            <div class="character-nose"></div>
+                            <div class="character-mouth" id="characterMouth"></div>
+
+                        </div>
+
+                        <!-- HAIR ACCESSORY -->
+                        <div class="hair-clip">
+                            <span></span>
+                            <span></span>
+                        </div>
+
+                    </div>
+
+
+                    <!-- SPEECH BUBBLE -->
+                    <div class="assistant-speech" id="assistantSpeech">
+                        <span class="speech-sparkle">✦</span>
+
+                        <div>
+                            <strong id="speechTitle">Hi, bestie!</strong>
+                            <p id="speechText">
+                                What are we learning today? 💙
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <!-- QUICK ACTIONS -->
+                <div class="quick-actions">
+
+                    <button class="quick-card" data-prompt="Explain a difficult topic to me in simple words with examples.">
+                        <span class="quick-icon icon-blue">✧</span>
+                        <span class="quick-text">
+                            <strong>Explain a topic</strong>
+                            <small>Make difficult things simple</small>
+                        </span>
+                        <span class="quick-arrow">↗</span>
+                    </button>
+
+                    <button class="quick-card" data-prompt="Help me create clear, organized study notes for my next exam.">
+                        <span class="quick-icon icon-purple">▤</span>
+                        <span class="quick-text">
+                            <strong>Create study notes</strong>
+                            <small>Organize your learning</small>
+                        </span>
+                        <span class="quick-arrow">↗</span>
+                    </button>
+
+                    <button class="quick-card" data-prompt="Create a short practice quiz to test my knowledge.">
+                        <span class="quick-icon icon-cyan">◎</span>
+                        <span class="quick-text">
+                            <strong>Test my knowledge</strong>
+                            <small>Practice with a quiz</small>
+                        </span>
+                        <span class="quick-arrow">↗</span>
+                    </button>
+
+                </div>
+
+
+                <!-- CHAT AREA -->
+                <div class="conversation" id="conversation">
+
+                    <div class="conversation-divider">
+                        <span>YOUR CONVERSATION</span>
+                    </div>
+
+                    <div class="message assistant-message">
+
+                        <div class="message-avatar">L</div>
+
+                        <div class="message-content">
+                            <div class="message-name">
+                                Luna
+                                <span class="ai-label">AI COMPANION</span>
+                            </div>
+
+                            <div class="message-bubble">
+                                Heyyy! 🦋 I'm so happy you're here.
+
+                                <br><br>
+
+                                Ask me anything, share a study topic,
+                                or tell me what you're struggling with.
+                                We'll figure it out together!
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- CHAT COMPOSER -->
+                <div class="composer-wrapper">
+
+                    <div class="composer" id="composer">
+
+                        <button
+                            class="composer-attach"
+                            id="attachButton"
+                            title="Attach a document"
+                            aria-label="Attach a document"
+                        >＋</button>
+
+                        <input
+                            type="file"
+                            id="fileInput"
+                            accept=".pdf,.txt,.docx,.pptx"
+                            hidden
+                        >
+
+                        <textarea
+                            id="chatInput"
+                            rows="1"
+                            maxlength="5000"
+                            placeholder="Ask Luna anything..."
+                            aria-label="Message Luna"
+                        ></textarea>
+
+                        <div class="composer-actions">
+
+                            <span class="composer-hint">✦ AI</span>
+
+                            <button
+                                class="send-button"
+                                id="sendButton"
+                                aria-label="Send message"
+                                title="Send message"
+                            >↑</button>
+
+                        </div>
+
+                    </div>
+
+                    <div class="composer-bottom">
+                        <span>✧ Your little steps lead to big dreams.</span>
+                        <span id="characterCount">0 / 5000</span>
+                    </div>
+
+                    <p class="disclaimer">
+                        Lunexa's frontend preview is active.
+                        Connect the AI backend to generate real AI answers.
+                    </p>
+
+                </div>
+
+            </section>
+
+        </div>
+
+
+        <!-- TOAST -->
+        <div class="toast" id="toast" role="status"></div>
+
+    </main>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
