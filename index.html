@@ -1,419 +1,240 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#071329">
 
-    <title>Lunexa AI — Your Study Companion</title>
+  <title>Lunexa AI | Your Study Universe</title>
 
-    <meta
-        name="description"
-        content="Lunexa AI is your personal AI-powered study companion."
-    >
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet"
-    >
-
-    <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-<div class="app">
+<div class="app-shell">
 
-    <!-- MOBILE OVERLAY -->
-    <div class="overlay" id="overlay"></div>
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">✦</div>
+      <div>
+        <h2>Lunexa<span> AI</span></h2>
+        <small>Your study universe</small>
+      </div>
+    </div>
 
-        <div class="brand">
-            <div class="brand-logo">L</div>
+    <button class="primary-button new-chat" data-action="new-chat">
+      ＋ New Chat
+    </button>
 
-            <div class="brand-text">
-                <h2>Lunexa<span>AI</span></h2>
-                <p>YOUR STUDY UNIVERSE</p>
-            </div>
+    <div class="nav-label">WORKSPACE</div>
 
-            <button
-                class="close-sidebar"
-                id="closeSidebar"
-                aria-label="Close sidebar"
-            >×</button>
+    <nav class="navigation" id="navigation">
+
+      <button class="nav-item active" data-page="chat">
+        <span>✧</span> AI Chat
+      </button>
+
+      <button class="nav-item" data-page="notes">
+        <span>▤</span> Study Notes
+      </button>
+
+      <button class="nav-item" data-page="documents">
+        <span>▧</span> Documents
+      </button>
+
+      <button class="nav-item" data-page="youtube">
+        <span>▷</span> YouTube Study
+      </button>
+
+      <button class="nav-item" data-page="quiz">
+        <span>✎</span> Quiz & Flashcards
+      </button>
+
+      <button class="nav-item" data-page="groups">
+        <span>♧</span> Group Study
+        <span class="nav-badge">NEW</span>
+      </button>
+
+      <button class="nav-item" data-page="friends">
+        <span>♡</span> Friends
+      </button>
+
+      <button class="nav-item" data-page="history">
+        <span>◷</span> Chat History
+      </button>
+
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="profile-avatar">K</div>
+
+      <div class="profile-details">
+        <strong>My Study Space</strong>
+        <small>Keep learning ✨</small>
+      </div>
+
+      <button class="icon-button" data-action="toggle-theme"
+              aria-label="Toggle theme">☼</button>
+    </div>
+
+  </aside>
+
+
+  <!-- MAIN CONTENT -->
+  <main class="main-panel">
+
+    <header class="topbar">
+
+      <button class="icon-button mobile-menu"
+              id="menuToggle"
+              aria-label="Open menu">☰</button>
+
+      <div class="topbar-title">
+        <span class="online-dot"></span>
+        <span id="pageHeading">AI Chat</span>
+      </div>
+
+      <button class="profile-button" data-page="friends">
+        <span>♡</span> Friends
+      </button>
+
+    </header>
+
+
+    <!-- JAVASCRIPT RENDERS PAGES HERE -->
+    <section class="page-container" id="pageContainer"></section>
+
+  </main>
+
+
+  <!-- AI BUDDY PANEL -->
+  <aside class="buddy-panel">
+
+    <div class="buddy-card">
+
+      <div class="buddy-topline">
+        <div>
+          <span class="online-dot"></span>
+          <strong>Lunexa</strong>
         </div>
 
-        <button class="new-chat-btn" id="newChat">
-            <span>＋</span>
-            <span>New conversation</span>
-        </button>
+        <span class="buddy-tag">AI BUDDY</span>
+      </div>
 
-        <div class="nav-section">
-            <p class="section-label">WORKSPACE</p>
 
-            <button class="nav-item active" data-page="chat">
-                <span class="nav-icon">✦</span>
-                <span>AI Assistant</span>
-            </button>
+      <div class="buddy-scene">
 
-            <button class="nav-item" data-page="documents">
-                <span class="nav-icon">▤</span>
-                <span>My Documents</span>
-            </button>
+        <div class="buddy-glow"></div>
 
-            <button class="nav-item" data-page="notes">
-                <span class="nav-icon">✎</span>
-                <span>Smart Notes</span>
-            </button>
+        <div class="floating-star star-a">✦</div>
+        <div class="floating-star star-b">✧</div>
+        <div class="floating-star star-c">✦</div>
 
-            <button class="nav-item" data-page="youtube">
-                <span class="nav-icon">▷</span>
-                <span>YouTube Study</span>
-            </button>
+        <div class="buddy-character" id="buddyCharacter">
 
-            <button class="nav-item" data-page="quiz">
-                <span class="nav-icon">◎</span>
-                <span>Quiz & Flashcards</span>
-            </button>
+          <div class="hair-back"></div>
 
-            <button class="nav-item" data-page="library">
-                <span class="nav-icon">▣</span>
-                <span>Study Library</span>
-            </button>
-        </div>
+          <div class="neck"></div>
 
-        <div class="sidebar-divider"></div>
+          <div class="torso">
+            <div class="shirt-collar"></div>
+            <div class="shirt-symbol">✦</div>
+          </div>
 
-        <div class="nav-section">
-            <p class="section-label">YOUR SPACE</p>
+          <div class="arm arm-left"></div>
+          <div class="arm arm-right"></div>
 
-            <button class="nav-item" data-page="history">
-                <span class="nav-icon">◷</span>
-                <span>Recent Chats</span>
-            </button>
-        </div>
+          <div class="head">
 
-        <div class="sidebar-spacer"></div>
+            <div class="hair-cap"></div>
+            <div class="hair-lock lock-left"></div>
+            <div class="hair-lock lock-right"></div>
 
-        <!-- MINI ASSISTANT CARD -->
-        <div class="mini-assistant-card">
+            <div class="ear ear-left"></div>
+            <div class="ear ear-right"></div>
 
-            <div class="mini-character">
-                <div class="mini-hair"></div>
-                <div class="mini-face">
-                    <span class="mini-eye"></span>
-                    <span class="mini-eye"></span>
-                    <span class="mini-smile"></span>
-                </div>
-                <div class="mini-body"></div>
+            <div class="eyebrow brow-left"></div>
+            <div class="eyebrow brow-right"></div>
+
+            <div class="eye eye-left">
+              <div class="pupil"></div>
             </div>
 
-            <div>
-                <strong>Luna is here!</strong>
-                <p>Your study buddy 💙</p>
+            <div class="eye eye-right">
+              <div class="pupil"></div>
             </div>
 
-            <span class="online-dot"></span>
-        </div>
+            <div class="cheek cheek-left"></div>
+            <div class="cheek cheek-right"></div>
 
-        <div class="profile">
-            <div class="profile-avatar">K</div>
+            <div class="nose"></div>
+            <div class="mouth"></div>
 
-            <div class="profile-info">
-                <strong>My Workspace</strong>
-                <span>Personal account</span>
-            </div>
-
-            <span class="profile-menu">•••</span>
-        </div>
-
-    </aside>
-
-
-    <!-- MAIN CONTENT -->
-    <main class="main">
-
-        <!-- TOPBAR -->
-        <header class="topbar">
-
-            <button
-                class="menu-button"
-                id="menuButton"
-                aria-label="Open menu"
-            >☰</button>
-
-            <div class="breadcrumb">
-                <span class="breadcrumb-muted">Lunexa</span>
-                <span class="breadcrumb-separator">/</span>
-                <span id="pageTitle">AI Assistant</span>
-            </div>
-
-            <div class="topbar-right">
-
-                <div class="status-pill">
-                    <span class="status-dot"></span>
-                    <span>Study mode</span>
-                </div>
-
-                <button
-                    class="icon-button"
-                    id="themeButton"
-                    aria-label="Toggle theme"
-                    title="Toggle theme"
-                >☼</button>
-
-                <div class="top-avatar">K</div>
-
-            </div>
-
-        </header>
-
-
-        <!-- PAGE CONTENT -->
-        <div class="content" id="pageContent">
-
-            <!-- CHAT PAGE -->
-            <section class="chat-page" id="chatPage">
-
-                <div class="welcome-section">
-
-                    <div class="welcome-badge">
-                        <span>✦</span>
-                        YOUR PERSONAL AI STUDY COMPANION
-                    </div>
-
-                    <h1>
-                        Hey there, learner!<br>
-                        <span>What shall we explore today?</span>
-                    </h1>
-
-                    <p class="welcome-description">
-                        I'm Luna, your little AI study buddy.
-                        Let's turn confusing topics into clear ideas
-                        and make studying a little more magical.
-                    </p>
-
-                </div>
-
-
-                <!-- ANIMATED GIRL ASSISTANT -->
-                <div class="assistant-stage">
-
-                    <div class="orbit orbit-one"></div>
-                    <div class="orbit orbit-two"></div>
-
-                    <div class="sparkle sparkle-one">✦</div>
-                    <div class="sparkle sparkle-two">✧</div>
-                    <div class="sparkle sparkle-three">✦</div>
-                    <div class="sparkle sparkle-four">·</div>
-
-                    <div class="assistant-character" id="assistantCharacter">
-
-                        <div class="character-shadow"></div>
-
-                        <!-- HAIR -->
-                        <div class="character-hair-back"></div>
-
-                        <!-- BODY -->
-                        <div class="character-body">
-                            <div class="hoodie-neck"></div>
-                            <div class="hoodie-logo">L</div>
-                            <div class="hoodie-pocket"></div>
-                        </div>
-
-                        <!-- ARMS -->
-                        <div class="character-arm arm-left"></div>
-                        <div class="character-arm arm-right"></div>
-
-                        <!-- HEAD -->
-                        <div class="character-head">
-
-                            <div class="character-ear ear-left"></div>
-                            <div class="character-ear ear-right"></div>
-
-                            <div class="character-hair-top"></div>
-                            <div class="character-bang bang-left"></div>
-                            <div class="character-bang bang-right"></div>
-
-                            <div class="character-eyebrow eyebrow-left"></div>
-                            <div class="character-eyebrow eyebrow-right"></div>
-
-                            <div class="character-eye eye-left">
-                                <span></span>
-                            </div>
-
-                            <div class="character-eye eye-right">
-                                <span></span>
-                            </div>
-
-                            <div class="character-blush blush-left"></div>
-                            <div class="character-blush blush-right"></div>
-
-                            <div class="character-nose"></div>
-                            <div class="character-mouth" id="characterMouth"></div>
-
-                        </div>
-
-                        <!-- HAIR ACCESSORY -->
-                        <div class="hair-clip">
-                            <span></span>
-                            <span></span>
-                        </div>
-
-                    </div>
-
-
-                    <!-- SPEECH BUBBLE -->
-                    <div class="assistant-speech" id="assistantSpeech">
-                        <span class="speech-sparkle">✦</span>
-
-                        <div>
-                            <strong id="speechTitle">Hi, bestie!</strong>
-                            <p id="speechText">
-                                What are we learning today? 💙
-                            </p>
-                        </div>
-                    </div>
-
-                </div>
-
-
-                <!-- QUICK ACTIONS -->
-                <div class="quick-actions">
-
-                    <button class="quick-card" data-prompt="Explain a difficult topic to me in simple words with examples.">
-                        <span class="quick-icon icon-blue">✧</span>
-                        <span class="quick-text">
-                            <strong>Explain a topic</strong>
-                            <small>Make difficult things simple</small>
-                        </span>
-                        <span class="quick-arrow">↗</span>
-                    </button>
-
-                    <button class="quick-card" data-prompt="Help me create clear, organized study notes for my next exam.">
-                        <span class="quick-icon icon-purple">▤</span>
-                        <span class="quick-text">
-                            <strong>Create study notes</strong>
-                            <small>Organize your learning</small>
-                        </span>
-                        <span class="quick-arrow">↗</span>
-                    </button>
-
-                    <button class="quick-card" data-prompt="Create a short practice quiz to test my knowledge.">
-                        <span class="quick-icon icon-cyan">◎</span>
-                        <span class="quick-text">
-                            <strong>Test my knowledge</strong>
-                            <small>Practice with a quiz</small>
-                        </span>
-                        <span class="quick-arrow">↗</span>
-                    </button>
-
-                </div>
-
-
-                <!-- CHAT AREA -->
-                <div class="conversation" id="conversation">
-
-                    <div class="conversation-divider">
-                        <span>YOUR CONVERSATION</span>
-                    </div>
-
-                    <div class="message assistant-message">
-
-                        <div class="message-avatar">L</div>
-
-                        <div class="message-content">
-                            <div class="message-name">
-                                Luna
-                                <span class="ai-label">AI COMPANION</span>
-                            </div>
-
-                            <div class="message-bubble">
-                                Heyyy! 🦋 I'm so happy you're here.
-
-                                <br><br>
-
-                                Ask me anything, share a study topic,
-                                or tell me what you're struggling with.
-                                We'll figure it out together!
-                            </div>
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                <!-- CHAT COMPOSER -->
-                <div class="composer-wrapper">
-
-                    <div class="composer" id="composer">
-
-                        <button
-                            class="composer-attach"
-                            id="attachButton"
-                            title="Attach a document"
-                            aria-label="Attach a document"
-                        >＋</button>
-
-                        <input
-                            type="file"
-                            id="fileInput"
-                            accept=".pdf,.txt,.docx,.pptx"
-                            hidden
-                        >
-
-                        <textarea
-                            id="chatInput"
-                            rows="1"
-                            maxlength="5000"
-                            placeholder="Ask Luna anything..."
-                            aria-label="Message Luna"
-                        ></textarea>
-
-                        <div class="composer-actions">
-
-                            <span class="composer-hint">✦ AI</span>
-
-                            <button
-                                class="send-button"
-                                id="sendButton"
-                                aria-label="Send message"
-                                title="Send message"
-                            >↑</button>
-
-                        </div>
-
-                    </div>
-
-                    <div class="composer-bottom">
-                        <span>✧ Your little steps lead to big dreams.</span>
-                        <span id="characterCount">0 / 5000</span>
-                    </div>
-
-                    <p class="disclaimer">
-                        Lunexa's frontend preview is active.
-                        Connect the AI backend to generate real AI answers.
-                    </p>
-
-                </div>
-
-            </section>
+          </div>
 
         </div>
 
+        <div class="buddy-speech" id="buddySpeech">
+          Hey bestie! Let's study together! 💙
+        </div>
 
-        <!-- TOAST -->
-        <div class="toast" id="toast" role="status"></div>
+      </div>
 
-    </main>
+
+      <div class="buddy-description">
+        <div class="buddy-name">Your study bestie 💙</div>
+
+        <p id="buddyDescription">
+          Ask me questions, organise your notes, and make learning fun.
+        </p>
+      </div>
+
+
+      <div class="buddy-stats">
+
+        <div>
+          <span>✧</span>
+          <strong>Curious</strong>
+          <small>Always learning</small>
+        </div>
+
+        <div>
+          <span>♡</span>
+          <strong>Supportive</strong>
+          <small>Here to help</small>
+        </div>
+
+      </div>
+
+
+      <div class="buddy-tip">
+        <span class="tip-icon">💡</span>
+
+        <div>
+          <strong>Today's little tip</strong>
+          <p>Small steps every day create big results.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="buddy-footer">
+      Made for curious minds ✨
+    </div>
+
+  </aside>
 
 </div>
 
+
+<!-- TOAST NOTIFICATIONS -->
+<div class="toast" id="toast" role="status"></div>
+
+
+<!-- JAVASCRIPT -->
 <script src="app.js"></script>
 
 </body>
