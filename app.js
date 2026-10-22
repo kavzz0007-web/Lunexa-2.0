@@ -1521,27 +1521,56 @@ function removeFriend(id) {
 
   showToast("Friend removed.");
 }
-
 async function shareLunexa() {
-  const url = window.location.origin;
-  const text = "Let's study together with Lunexa AI! 💙 " + url;
+  const inviteUrl = window.location.origin;
 
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: "Lunexa AI",
-        text: text,
-        url: url
-      });
-    } catch (error) {
-      if (error.name !== "AbortError") {
-        await copyText(text);
-      }
+  const inviteMessage = [
+    "🌙✨ Hey! Try Lunexa AI!",
+    "",
+    "💙 Your personal AI study companion!",
+    "",
+    "📚 Generate smart study notes",
+    "📄 Summarize study documents",
+    "💬 Ask questions and get AI answers",
+    "🧠 Practise with quizzes",
+    "🎴 Learn with flashcards",
+    "",
+    "🚀 Try Lunexa AI here:",
+    inviteUrl,
+    "",
+    "Let's study smarter together! 💙"
+  ].join("\n");
+
+  const shareOnWhatsApp = window.confirm(
+    "🌙 Invite friends to Lunexa AI!\n\n" +
+    "OK = Share on WhatsApp 💚\n" +
+    "Cancel = Copy invite link 📋"
+  );
+
+  if (shareOnWhatsApp) {
+    const whatsappUrl =
+      "https://wa.me/?text=" +
+      encodeURIComponent(inviteMessage);
+
+    const whatsappWindow = window.open(
+      whatsappUrl,
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+    if (whatsappWindow) {
+      showToast("Opening WhatsApp! 💚");
+    } else {
+      await copyText(inviteMessage);
+      showToast("Invite copied! Open WhatsApp to share 💙");
     }
-  } else {
-    await copyText(text);
+
+    return;
   }
+
+  await copyText(inviteUrl);
 }
+
 
 /* ---------- QUIZ ---------- */
 
